@@ -152,4 +152,9 @@ public class StreamExecDataStreamScan extends ExecNodeBase<RowData>
     public DataStream<?> getDataStream() {
         return dataStream;
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

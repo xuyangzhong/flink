@@ -23,4 +23,10 @@ import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 
 /** Base class for batch {@link ExecNode}. */
 @Internal
-public interface BatchExecNode<T> extends ExecNode<T> {}
+public interface BatchExecNode<T> extends ExecNode<T> {
+
+    @Override
+    default boolean supportConsume() {
+        return false;
+    }
+}

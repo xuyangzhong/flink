@@ -18,19 +18,19 @@
 
 package org.apache.flink.table.planner.delegation
 
-import org.apache.flink.api.common.RuntimeExecutionMode
+import org.apache.flink.api.common.{JobID, RuntimeExecutionMode}
 import org.apache.flink.api.dag.Transformation
 import org.apache.flink.configuration.ExecutionOptions
 import org.apache.flink.streaming.api.graph.StreamGraph
 import org.apache.flink.table.api.{ExplainDetail, TableConfig, TableException}
-import org.apache.flink.table.catalog.{CatalogManager, FunctionCatalog, ObjectIdentifier}
+import org.apache.flink.table.catalog.{CatalogDatabaseImpl, CatalogManager, FunctionCatalog, ObjectIdentifier}
 import org.apache.flink.table.delegation.Executor
 import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.operations.{CatalogSinkModifyOperation, ModifyOperation, Operation, QueryOperation}
 import org.apache.flink.table.planner.operations.PlannerQueryOperation
 import org.apache.flink.table.planner.plan.`trait`._
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeGraph
-import org.apache.flink.table.planner.plan.nodes.exec.processor.ExecNodeGraphProcessor
+import org.apache.flink.table.planner.plan.nodes.exec.processor.{ExecNodeGraphProcessor, ReuseExecNodeGraphProcessor}
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecNode
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodePlanDumper
 import org.apache.flink.table.planner.plan.optimize.{Optimizer, StreamCommonSubGraphBasedOptimizer}
@@ -40,6 +40,8 @@ import org.apache.flink.table.planner.utils.DummyStreamExecutionEnvironment
 import org.apache.calcite.plan.{ConventionTraitDef, RelTrait, RelTraitDef}
 import org.apache.calcite.rel.logical.LogicalTableModify
 import org.apache.calcite.sql.SqlExplainLevel
+import org.apache.flink.configuration.PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID
+import org.apache.flink.table.planner.plan.nodes.exec.common.{CommonExecLegacySink, CommonExecSink}
 
 import java.util
 
@@ -65,10 +67,26 @@ class StreamPlanner(
 
   override protected def getOptimizer: Optimizer = new StreamCommonSubGraphBasedOptimizer(this)
 
-  override protected def getExecNodeGraphProcessors: Seq[ExecNodeGraphProcessor] = Seq()
+  override protected def getExecNodeGraphProcessors: Seq[ExecNodeGraphProcessor] = Seq(
+    new ReuseExecNodeGraphProcessor()
+  )
 
   override protected def translateToPlan(execGraph: ExecNodeGraph): util.List[Transformation[_]] = {
     validateAndOverrideConfiguration()
+
+    if (execGraph.getRootNodes.size() != 1
+      || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink]
+      || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecLegacySink[_]]) {
+      val jobId = new JobID().toHexString
+      val properties = new util.HashMap[String, String]()
+      properties.put("type", "job")
+      catalogManager.getCatalog(catalogManager.getCurrentCatalog).get().createDatabase(
+        jobId, new CatalogDatabaseImpl(properties, ""), false)
+      config.getConfiguration.set(PIPELINE_FIXED_JOB_ID, jobId)
+    } else {
+      config.getConfiguration.removeConfig(PIPELINE_FIXED_JOB_ID)
+    }
+
     val planner = createDummyPlanner()
     val transformations = execGraph.getRootNodes.map {
       case node: StreamExecNode[_] => node.translateToPlan(planner)

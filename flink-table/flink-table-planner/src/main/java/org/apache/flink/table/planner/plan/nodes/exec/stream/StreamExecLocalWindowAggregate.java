@@ -188,4 +188,9 @@ public class StreamExecLocalWindowAggregate extends StreamExecWindowAggregateBas
                 sliceAssigner,
                 shiftTimeZone);
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

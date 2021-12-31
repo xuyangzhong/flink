@@ -21,20 +21,27 @@ package org.apache.flink.table.planner.plan.nodes.exec;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.config.OptimizerConfigOptions;
+import org.apache.flink.table.catalog.CatalogOpTable;
+import org.apache.flink.table.catalog.ObjectIdentifier;
 import org.apache.flink.table.delegation.Planner;
 import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecExchange;
 import org.apache.flink.table.planner.plan.nodes.exec.visitor.ExecNodeVisitor;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.utils.TypeConversions;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnore;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import static org.apache.flink.configuration.PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -58,6 +65,8 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
     @JsonIgnore private List<ExecEdge> inputEdges;
 
     @JsonIgnore private transient Transformation<T> transformation;
+
+    @JsonIgnore private String digest;
 
     /** This is used to assign a unique ID to every ExecNode. */
     private static Integer idCounter = 0;
@@ -135,6 +144,7 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
     public Transformation<T> translateToPlan(Planner planner) {
         if (transformation == null) {
             transformation = translateToPlanInternal((PlannerBase) planner);
+            registerExecNode((PlannerBase) planner);
             if (this instanceof SingleTransformationTranslator) {
                 if (inputsContainSingleton()) {
                     transformation.setParallelism(1);
@@ -145,12 +155,61 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         return transformation;
     }
 
+    private void registerExecNode(PlannerBase planner) {
+        if (!supportConsume()) {
+            return;
+        }
+        String jobId = planner.getTableConfig().getConfiguration().get(PIPELINE_FIXED_JOB_ID);
+        if (jobId == null) {
+            return;
+        }
+        String operatorId = "op_" + getId();
+        String digest = getDigest();
+        Schema schema =
+                Schema.newBuilder()
+                        .fromRowDataType(TypeConversions.fromLogicalToDataType(outputType))
+                        .build();
+        Map<String, String> options = new HashMap<>();
+        options.put(PIPELINE_FIXED_JOB_ID.key(), jobId);
+        options.put("connector", "operator");
+        options.put("digest", digest);
+        options.put("job_id", jobId);
+        options.put("op_id", operatorId);
+        CatalogOpTable opTable = new CatalogOpTable(schema, getId(), options);
+
+        ObjectIdentifier identifier =
+                ObjectIdentifier.of(
+                        planner.catalogManager().getCurrentCatalog(), jobId, operatorId);
+        planner.catalogManager().createTable(opTable, identifier, false);
+    }
+
     /** Internal method, translates this node into a Flink operator. */
     protected abstract Transformation<T> translateToPlanInternal(PlannerBase planner);
 
     @Override
     public void accept(ExecNodeVisitor visitor) {
         visitor.visit(this);
+    }
+
+    @Override
+    public String getDigest() {
+        if (digest == null) {
+            StringBuilder sb = new StringBuilder();
+            getInputEdges()
+                    .forEach(
+                            e -> {
+                                if (sb.length() > 0) {
+                                    sb.append("\n");
+                                }
+                                sb.append(e.getSource().getDigest());
+                            });
+            if (sb.length() > 0) {
+                sb.append("\n");
+            }
+            sb.append(getDescription());
+            digest = sb.toString();
+        }
+        return digest;
     }
 
     /** Whether there is singleton exchange node as input. */

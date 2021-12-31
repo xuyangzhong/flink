@@ -47,4 +47,9 @@ public class StreamExecValues extends CommonExecValues implements StreamExecNode
             @JsonProperty(FIELD_NAME_DESCRIPTION) String description) {
         super(tuples, id, outputType, description);
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

@@ -243,4 +243,9 @@ public class StreamExecIncrementalGroupAggregate extends StreamExecAggregateBase
                 .needMerge(mergedAccOffset, true, mergedAccExternalTypes)
                 .generateAggsHandler(name, aggInfoList);
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

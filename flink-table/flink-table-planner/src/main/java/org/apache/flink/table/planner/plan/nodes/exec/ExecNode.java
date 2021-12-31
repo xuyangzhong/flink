@@ -112,4 +112,14 @@ public interface ExecNode<T> extends ExecNodeTranslator<T> {
      * @param visitor ExecNodeVisitor.
      */
     void accept(ExecNodeVisitor visitor);
+
+    @JsonIgnore
+    default boolean supportConsume() {
+        return true;
+    }
+
+    @JsonIgnore
+    default String getDigest() {
+        return null;
+    }
 }

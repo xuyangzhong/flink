@@ -155,4 +155,9 @@ public class StreamExecLocalGroupAggregate extends StreamExecAggregateBase {
                 InternalTypeInfo.of(getOutputType()),
                 inputTransform.getParallelism());
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

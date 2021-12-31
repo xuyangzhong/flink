@@ -107,4 +107,9 @@ public class StreamExecExchange extends CommonExecExchange implements StreamExec
         transformation.setOutputType(InternalTypeInfo.of(getOutputType()));
         return transformation;
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

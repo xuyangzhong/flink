@@ -100,4 +100,9 @@ public class StreamExecLegacySink<T> extends CommonExecLegacySink<T> implements 
             return inputRowType;
         }
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

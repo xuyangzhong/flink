@@ -65,4 +65,9 @@ public class StreamExecTableSourceScan extends CommonExecTableSourceScan
         // rather than addLegacySource() for streaming, because it take care of checkpoint.
         return env.createInput(inputFormat, outputTypeInfo).name(operatorName).getTransformation();
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

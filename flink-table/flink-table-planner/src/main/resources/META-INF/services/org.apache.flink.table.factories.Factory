@@ -17,3 +17,4 @@ org.apache.flink.table.planner.delegation.DefaultExecutorFactory
 org.apache.flink.table.planner.delegation.DefaultParserFactory
 org.apache.flink.table.planner.delegation.DefaultPlannerFactory
 org.apache.flink.table.planner.delegation.DefaultExpressionParserFactory
+org.apache.flink.table.planner.connectors.OperatorTableFactory

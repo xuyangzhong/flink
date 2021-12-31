@@ -143,4 +143,9 @@ public class StreamExecSink extends CommonExecSink implements StreamExecNode<Obj
         return createSinkTransformation(
                 planner, inputTransform, tableSink, rowtimeFieldIndex, upsertMaterialize);
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }

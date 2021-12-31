@@ -171,4 +171,9 @@ public class StreamExecLegacyTableSourceScan extends CommonExecLegacyTableSource
                 .name(tableSource.explainSource())
                 .getTransformation();
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }
