@@ -19,27 +19,33 @@
 
 package org.apache.flink.table.planner.connectors;
 
-import org.apache.flink.streaming.api.functions.source.SourceFunction;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.connectors.mv.OperatorIncrementSubscriber;
 import org.apache.flink.table.types.logical.RowType;
 
 public class OperatorTableSource implements ScanTableSource {
 
+    private final String endpoint;
     private final String jobId;
+    private final String operatorId;
     private final RowType rowType;
+    private final int parallelism;
 
-    public OperatorTableSource(String jobId, RowType rowType) {
+    public OperatorTableSource(
+            String endpoint, String jobId, String operatorId, int parallelism, RowType rowType) {
+        this.endpoint = endpoint;
         this.jobId = jobId;
         this.rowType = rowType;
+        this.operatorId = operatorId;
+        this.parallelism = parallelism;
     }
 
     @Override
     public DynamicTableSource copy() {
-        return new OperatorTableSource(jobId, rowType);
+        return new OperatorTableSource(endpoint, jobId, operatorId, parallelism, rowType);
     }
 
     @Override
@@ -54,15 +60,8 @@ public class OperatorTableSource implements ScanTableSource {
 
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext runtimeProviderContext) {
-        // TODO
         return SourceFunctionProvider.of(
-                new SourceFunction<RowData>() {
-                    @Override
-                    public void run(SourceContext<RowData> ctx) throws Exception {}
-
-                    @Override
-                    public void cancel() {}
-                },
-                true);
+                new OperatorIncrementSubscriber(endpoint, jobId, operatorId, parallelism, rowType),
+                false);
     }
 }

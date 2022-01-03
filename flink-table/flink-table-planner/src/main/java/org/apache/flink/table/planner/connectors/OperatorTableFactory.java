@@ -41,7 +41,12 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
         Map<String, String> properties = context.getCatalogTable().getOptions();
         String jobId = properties.get("job_id");
         RowType rowType = (RowType) context.getPhysicalRowDataType().getLogicalType();
-        return new OperatorTableSource(jobId, rowType);
+        return new OperatorTableSource(
+                "http://localhost:8080",
+                jobId,
+                context.getObjectIdentifier().getObjectName(),
+                2,
+                rowType);
     }
 
     @Override

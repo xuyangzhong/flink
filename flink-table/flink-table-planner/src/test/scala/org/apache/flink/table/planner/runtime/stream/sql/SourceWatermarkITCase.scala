@@ -41,65 +41,6 @@ class SourceWatermarkITCase extends StreamingTestBase {
   @Rule
   def usesLegacyRows: LegacyRowResource = LegacyRowResource.INSTANCE
 
-
-  @Test
-  def test(): Unit ={
-    val data = Seq(
-      row(1, 1,null.asInstanceOf[Integer]),
-      row(2, 2,null.asInstanceOf[Integer]),
-      row(3, null.asInstanceOf[Integer], 3),
-      row(4, null.asInstanceOf[Integer],4),
-    )
-    val ddl =
-      s"""
-         |create table test (
-         |  a int,
-         |  b int,
-         |  c int
-         |) with (
-         |  'connector' = 'filesystem',
-         |  'path' = '/Users/zhongxuyang/test/test.csv',
-         |  'format' = 'testcsv'
-         |)
-         |""".stripMargin
-
-    tEnv.executeSql(ddl)
-
-    val dd =
-      s"""
-         |insert into test values(1,1,cast(null as int)), (2,2,cast(null as int)), (3,cast(null as int),3), (4,cast(null as int),4)
-         |""".stripMargin
-
-    tEnv.executeSql(dd)
-
-    val ddl2 = s"""
-                  |create table test2 (
-                  |  a int,
-                  |  d int
-                  |) with (
-                  |  'connector' = 'filesystem',
-                  |  'path' = '/Users/zhongxuyang/test/test2.csv',
-                  |  'format' = 'testcsv'
-                  |)
-                  |""".stripMargin
-
-    tEnv.executeSql(ddl2)
-
-    val ddl3 =
-      s"""
-         | insert into test2 select a, (case when b is null then c else b end) as d from test
-         |""".stripMargin
-
-    tEnv.executeSql(ddl3)
-
-    val result = tEnv.sqlQuery("select * from test2").toAppendStream[Row]
-    val sink = new TestingAppendSink
-    result.addSink(sink)
-    env.execute()
-
-    printf(sink.getAppendResults.toString())
-  }
-
   @Test
   def testSimpleWatermarkPushDown(): Unit = {
     val data = Seq(

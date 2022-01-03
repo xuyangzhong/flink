@@ -108,27 +108,6 @@ public class CommonCollectSinkOperatorCoordinator
                 ipLists.getOrDefault(operatorId, new HashMap<>());
         subtaskIdAndIpInfo.put(subtask, new OperatorIpAndSocket(address));
         ipLists.put(operatorId, subtaskIdAndIpInfo);
-
-        Socket socket = ipLists.get(operatorId).get(subtask).socket;
-        //        if (socket == null) {
-        //            socket = new Socket();
-        //            socket.setSoTimeout(socketTimeout);
-        //            socket.setKeepAlive(true);
-        //            socket.setTcpNoDelay(true);
-        //
-        //            socket.connect(address);
-        //            LOG.info("socket test connect : address : " + address);
-        //            inStream = new DataInputViewStreamWrapper(socket.getInputStream());
-        //            outStream = new DataOutputViewStreamWrapper(socket.getOutputStream());
-        //            CommonCollectCoordinationRequest request =
-        //                    new CommonCollectCoordinationRequest(true, 10, operatorId, subtask);
-        //            request.serialize(outStream);
-        //            CompletableFuture<CoordinationResponse> responseFuture = new
-        // CompletableFuture<>();
-        //            responseFuture.complete(new CommonCollectCoordinationResponse(inStream));
-        //            System.err.println(responseFuture.get());
-        //            LOG.info("first send : " + responseFuture.get());
-        //        }
     }
 
     @Override

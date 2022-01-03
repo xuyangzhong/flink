@@ -27,6 +27,7 @@ import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.delegation.ExecutorFactory;
 import org.apache.flink.table.delegation.ExpressionParserFactory;
 import org.apache.flink.table.delegation.PlannerFactory;
+import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.factories.FactoryUtil;
 import org.apache.flink.util.IOUtils;
 
@@ -133,6 +134,11 @@ class PlannerModule {
     public PlannerFactory loadPlannerFactory() {
         return FactoryUtil.discoverFactory(
                 this.submoduleClassLoader, PlannerFactory.class, PlannerFactory.DEFAULT_IDENTIFIER);
+    }
+
+    public DynamicTableSourceFactory loadTableFactory(String identifier) {
+        return FactoryUtil.discoverFactory(
+                this.submoduleClassLoader, DynamicTableSourceFactory.class, identifier);
     }
 
     public ExpressionParserFactory loadExpressionParserFactory() {

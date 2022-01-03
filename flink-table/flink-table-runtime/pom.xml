@@ -37,6 +37,11 @@ under the License.
 	<packaging>jar</packaging>
 
 	<dependencies>
+		<dependency>
+			<groupId>org.apache.flink</groupId>
+			<artifactId>flink-clients</artifactId>
+			<version>${project.version}</version>
+		</dependency>
 		<!-- Table dependencies -->
 		<dependency>
 			<groupId>org.apache.flink</groupId>
