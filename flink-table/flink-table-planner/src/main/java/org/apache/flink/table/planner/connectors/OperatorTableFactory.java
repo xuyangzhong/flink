@@ -25,9 +25,16 @@ import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.types.logical.RowType;
 
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hashing;
+
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.flink.util.StringUtils.byteToHexString;
 
 public class OperatorTableFactory implements DynamicTableSourceFactory {
 
@@ -44,9 +51,16 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
         return new OperatorTableSource(
                 "http://localhost:8080",
                 jobId,
-                context.getObjectIdentifier().getObjectName(),
+                fromUID(context.getObjectIdentifier().getObjectName()),
                 2,
                 rowType);
+    }
+
+    private static String fromUID(String headOpUid) {
+        final HashFunction hashFunction = Hashing.murmur3_128(0);
+        final Charset charset = StandardCharsets.UTF_8;
+        byte[] bytes = hashFunction.newHasher().putString(headOpUid, charset).hash().asBytes();
+        return byteToHexString(bytes, 0, bytes.length);
     }
 
     @Override

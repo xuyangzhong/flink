@@ -72,7 +72,6 @@ class StreamPlanner(
   )
 
   override protected def translateToPlan(execGraph: ExecNodeGraph): util.List[Transformation[_]] = {
-    validateAndOverrideConfiguration()
 
     if (execGraph.getRootNodes.size() != 1
       || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink]
@@ -86,6 +85,8 @@ class StreamPlanner(
     } else {
       config.getConfiguration.removeConfig(PIPELINE_FIXED_JOB_ID)
     }
+
+    validateAndOverrideConfiguration()
 
     val planner = createDummyPlanner()
     val transformations = execGraph.getRootNodes.map {

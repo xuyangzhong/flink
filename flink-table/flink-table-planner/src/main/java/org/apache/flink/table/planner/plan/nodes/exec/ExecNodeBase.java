@@ -150,6 +150,7 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
                     transformation.setParallelism(1);
                     transformation.setMaxParallelism(1);
                 }
+                transformation.setUid("op_" + getId());
             }
         }
         return transformation;
