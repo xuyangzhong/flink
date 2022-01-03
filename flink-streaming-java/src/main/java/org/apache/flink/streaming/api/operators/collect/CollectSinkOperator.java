@@ -60,7 +60,7 @@ public class CollectSinkOperator<IN> extends StreamSink<IN> implements OperatorE
         return operatorIdFuture;
     }
 
-    void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
+    public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
         sinkFunction.setOperatorEventGateway(operatorEventGateway);
     }
 }

@@ -79,6 +79,7 @@ import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
 import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
 import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectOperatorFactory;
+import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectible;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.api.transformations.TimestampsAndWatermarksTransformation;
@@ -1164,7 +1165,7 @@ public class DataStream<T> {
             TypeInformation<R> outTypeInfo,
             OneInputStreamOperator<T, R> operator) {
         StreamOperatorFactory<R> operatorFactory;
-        if (operator instanceof StreamMap) {
+        if (operator instanceof CommonCollectible) {
             TypeSerializer<R> serializer = outTypeInfo.createSerializer(getExecutionConfig());
             operatorFactory =
                     (StreamOperatorFactory<R>)

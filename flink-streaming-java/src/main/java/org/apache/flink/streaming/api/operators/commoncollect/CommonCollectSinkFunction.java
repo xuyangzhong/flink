@@ -182,7 +182,6 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
                     CommonCollectCoordinationRequest request = null;
                     if (connection == null) {
                         // waiting for coordinator to connect
-                        serverSocket.setSoTimeout(2000);
                         connection = NetUtils.acceptWithoutTimeout(serverSocket);
                         inStream = new DataInputViewStreamWrapper(this.connection.getInputStream());
 

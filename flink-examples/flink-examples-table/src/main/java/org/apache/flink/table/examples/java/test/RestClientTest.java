@@ -38,12 +38,13 @@ import java.util.Arrays;
 /** . */
 public class RestClientTest {
     public static void main(String[] args) throws Exception {
+        int subtask = 0;
         MyRestClusterClient client =
                 new MyRestClusterClient("http://localhost:8081", new Configuration());
-        JobID jobId = JobID.fromHexString("d7013ec154ada0d0be9221ed9f88228a");
+        JobID jobId = JobID.fromHexString("87b8998359af64a0c8ce6566d7802f50");
         OperatorID opId =
                 OperatorID.fromJobVertexID(
-                        JobVertexID.fromHexString("0a448493b4782967b150582570326227"));
+                        JobVertexID.fromHexString("6d2677a0ecc3fd8df0b72ec675edf8f4"));
         LogicalType dataType = DataTypes.INT().getLogicalType();
         DataType externalType =
                 LogicalTypeDataTypeConverter.toDataType(dataType).bridgedTo(Integer.class);
@@ -53,7 +54,7 @@ public class RestClientTest {
         //        UncheckpointedCollectResultBuffer<RowData> buffer =
         //                new UncheckpointedCollectResultBuffer(serializer, true);
         CommonCollectCoordinationRequest request =
-                new CommonCollectCoordinationRequest(true, 1, opId.toString(), 0);
+                new CommonCollectCoordinationRequest(true, 1, opId.toString(), subtask);
         while (true) {
             CommonCollectCoordinationResponse response =
                     (CommonCollectCoordinationResponse)
@@ -69,7 +70,7 @@ public class RestClientTest {
 
             System.out.println(Arrays.toString(response.getResults(serializer).toArray()));
             Thread.sleep(1000);
-            request = new CommonCollectCoordinationRequest(true, 1, opId.toString(), 0);
+            request = new CommonCollectCoordinationRequest(true, 1, opId.toString(), subtask);
         }
     }
 }
