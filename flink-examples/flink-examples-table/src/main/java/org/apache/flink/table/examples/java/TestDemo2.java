@@ -25,8 +25,10 @@ import org.apache.flink.table.api.bridge.java.StreamTableEnvironment;
 public class TestDemo2 {
     public static void main(String[] args) throws Exception {
         StreamExecutionEnvironment env = StreamExecutionEnvironment.getExecutionEnvironment();
-        StreamTableEnvironment e = StreamTableEnvironment.create(env);
-        e.executeSql("create table test(a int) with ('connector'='datagen')");
-        e.sqlQuery("select * from test").execute().print();
+        StreamTableEnvironment tEnv = StreamTableEnvironment.create(env);
+        tEnv.executeSql(
+                "create table t1 (a varchar, b bigint) with ('connector' = 'datagen', 'rows-per-second' = '1')");
+        tEnv.executeSql("create table t2 (a bigint) with ('connector' = 'print')");
+        tEnv.executeSql("insert into t2 select count(*) from t1 group by mod(b, 10000)");
     }
 }

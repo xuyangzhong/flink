@@ -240,6 +240,7 @@ public class StreamExecGlobalGroupAggregate extends StreamExecAggregateBase {
                             generateUpdateBefore,
                             tableConfig.getIdleStateRetention().toMillis());
 
+            System.out.println(1);
             operator =
                     new KeyedMapBundleOperator<>(
                             aggFunction, AggregateUtil.createMiniBatchTrigger(tableConfig));

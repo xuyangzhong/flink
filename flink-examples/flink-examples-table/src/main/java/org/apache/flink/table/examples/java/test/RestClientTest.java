@@ -41,10 +41,10 @@ public class RestClientTest {
         int subtask = 0;
         MyRestClusterClient client =
                 new MyRestClusterClient("http://localhost:8081", new Configuration());
-        JobID jobId = JobID.fromHexString("87b8998359af64a0c8ce6566d7802f50");
+        JobID jobId = JobID.fromHexString("f6678d260b63c9d71c30adbee21dc5dd");
         OperatorID opId =
                 OperatorID.fromJobVertexID(
-                        JobVertexID.fromHexString("6d2677a0ecc3fd8df0b72ec675edf8f4"));
+                        JobVertexID.fromHexString("ea632d67b7d595e5b851708ae9ad79d6"));
         LogicalType dataType = DataTypes.INT().getLogicalType();
         DataType externalType =
                 LogicalTypeDataTypeConverter.toDataType(dataType).bridgedTo(Integer.class);

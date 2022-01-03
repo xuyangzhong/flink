@@ -55,7 +55,7 @@ public class SimpleOperatorFactory<OUT> extends AbstractStreamOperatorFactory<OU
         }
     }
 
-    protected SimpleOperatorFactory(StreamOperator<OUT> operator) {
+    public SimpleOperatorFactory(StreamOperator<OUT> operator) {
         this.operator = checkNotNull(operator);
         if (operator instanceof SetupableStreamOperator) {
             this.chainingStrategy = ((SetupableStreamOperator) operator).getChainingStrategy();

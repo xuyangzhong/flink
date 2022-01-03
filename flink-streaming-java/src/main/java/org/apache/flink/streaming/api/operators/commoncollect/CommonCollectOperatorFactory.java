@@ -18,16 +18,18 @@
 
 package org.apache.flink.streaming.api.operators.commoncollect;
 
+import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEventDispatcher;
-import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
 import org.apache.flink.streaming.api.operators.CoordinatedOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
+import org.apache.flink.streaming.api.operators.UdfStreamOperatorFactory;
 
 import java.time.Duration;
 
@@ -36,8 +38,8 @@ import java.time.Duration;
  *
  * @param <OUT>
  */
-public class CommonCollectOperatorFactory<OUT> extends SimpleOperatorFactory<Object>
-        implements CoordinatedOperatorFactory<Object> {
+public class CommonCollectOperatorFactory<OUT> extends SimpleOperatorFactory<OUT>
+        implements CoordinatedOperatorFactory<OUT>, UdfStreamOperatorFactory<OUT> {
 
     private static final long serialVersionUID = 1L;
 
@@ -49,10 +51,10 @@ public class CommonCollectOperatorFactory<OUT> extends SimpleOperatorFactory<Obj
             TypeSerializer<OUT> serializer,
             Duration socketTimeout,
             AbstractStreamOperator<OUT> operator) {
-        super((StreamOperator<Object>) operator);
+        super(operator);
         assert getOperator() instanceof CommonCollectible;
         this.operator = (AbstractStreamOperator<OUT>) getOperator();
-        ((CommonCollectible<Object>) operator).setSerializer((TypeSerializer<Object>) serializer);
+        ((CommonCollectible<OUT>) operator).setSerializer(serializer);
         this.socketTimeoutMillis = (int) socketTimeout.toMillis();
     }
 
@@ -62,14 +64,31 @@ public class CommonCollectOperatorFactory<OUT> extends SimpleOperatorFactory<Obj
     }
 
     @Override
+    public Function getUserFunction() {
+        if (operator instanceof AbstractUdfStreamOperator) {
+            return ((AbstractUdfStreamOperator) operator).getUserFunction();
+        }
+        return null;
+    }
+
+    @Override
+    public String getUserFunctionClassName() {
+        if (operator instanceof AbstractUdfStreamOperator) {
+            return ((AbstractUdfStreamOperator) operator).getUserFunction().getClass().getName();
+        }
+
+        return null;
+    }
+
+    @Override
     public OperatorCoordinator.Provider getCoordinatorProvider(
             String operatorName, OperatorID operatorID) {
         return new CommonCollectSinkOperatorCoordinator.Provider(operatorID, socketTimeoutMillis);
     }
 
     @Override
-    public <T extends StreamOperator<Object>> T createStreamOperator(
-            StreamOperatorParameters<Object> parameters) {
+    public <T extends StreamOperator<OUT>> T createStreamOperator(
+            StreamOperatorParameters<OUT> parameters) {
         final OperatorID operatorId = parameters.getStreamConfig().getOperatorID();
         final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
 
@@ -82,7 +101,7 @@ public class CommonCollectOperatorFactory<OUT> extends SimpleOperatorFactory<Obj
                 parameters.getStreamConfig(),
                 parameters.getOutput());
 
-        eventDispatcher.registerEventHandler(operatorId, (OperatorEventHandler) operator);
+        eventDispatcher.registerEventHandler(operatorId, operator);
 
         return (T) operator;
     }

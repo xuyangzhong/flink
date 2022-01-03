@@ -18,14 +18,26 @@
 
 package org.apache.flink.table.planner.plan.nodes.exec.utils;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeinfo.TypeInformation;
+import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.connector.source.Boundedness;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.core.memory.ManagedMemoryUseCase;
+import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
+import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
+import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
+import org.apache.flink.streaming.api.operators.SimpleInputFormatOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
+import org.apache.flink.streaming.api.operators.SimpleOutputFormatOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
+import org.apache.flink.streaming.api.operators.StreamSink;
+import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.operators.TwoInputStreamOperator;
+import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectOperatorFactory;
+import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectible;
 import org.apache.flink.streaming.api.transformations.LegacySourceTransformation;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.TwoInputTransformation;
@@ -78,14 +90,28 @@ public class ExecNodeUtil {
             TypeInformation<O> outputType,
             int parallelism,
             long memoryBytes) {
+        StreamOperatorFactory factory = null;
+        if (operator == null) {
+            factory = null;
+        } else if (operator instanceof StreamSource
+                && ((StreamSource) operator).getUserFunction()
+                        instanceof InputFormatSourceFunction) {
+            factory = new SimpleInputFormatOperatorFactory((StreamSource) operator);
+        } else if (operator instanceof StreamSink
+                && ((StreamSink) operator).getUserFunction() instanceof OutputFormatSinkFunction) {
+            factory = new SimpleOutputFormatOperatorFactory((StreamSink) operator);
+        } else if (operator instanceof AbstractUdfStreamOperator
+                && operator instanceof CommonCollectible) {
+            TypeSerializer<O> serializer = outputType.createSerializer(new ExecutionConfig());
+            factory =
+                    new CommonCollectOperatorFactory(
+                            serializer, (AbstractStreamOperator<O>) operator);
+        } else {
+            factory = new SimpleOperatorFactory(operator);
+        }
+
         return createOneInputTransformation(
-                input,
-                name,
-                desc,
-                SimpleOperatorFactory.of(operator),
-                outputType,
-                parallelism,
-                memoryBytes);
+                input, name, desc, factory, outputType, parallelism, memoryBytes);
     }
 
     /** Create a {@link OneInputTransformation}. */
