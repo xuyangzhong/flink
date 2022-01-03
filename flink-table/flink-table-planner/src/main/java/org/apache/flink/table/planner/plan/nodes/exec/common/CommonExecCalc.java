@@ -107,4 +107,9 @@ public abstract class CommonExecCalc extends ExecNodeBase<RowData>
                 InternalTypeInfo.of(getOutputType()),
                 inputTransform.getParallelism());
     }
+
+    @Override
+    public boolean supportConsume() {
+        return false;
+    }
 }
