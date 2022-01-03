@@ -63,6 +63,7 @@ import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.PrintSinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.functions.sink.SocketClientSink;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.ProcessOperator;
@@ -77,6 +78,7 @@ import org.apache.flink.streaming.api.operators.collect.CollectResultIterator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperator;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkOperatorFactory;
 import org.apache.flink.streaming.api.operators.collect.CollectStreamSink;
+import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectOperatorFactory;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.PartitionTransformation;
 import org.apache.flink.streaming.api.transformations.TimestampsAndWatermarksTransformation;
@@ -1155,13 +1157,24 @@ public class DataStream<T> {
      * @return the data stream constructed
      * @see #transform(String, TypeInformation, OneInputStreamOperatorFactory)
      */
+    @SuppressWarnings("checkstyle:EmptyLineSeparator")
     @PublicEvolving
     public <R> SingleOutputStreamOperator<R> transform(
             String operatorName,
             TypeInformation<R> outTypeInfo,
             OneInputStreamOperator<T, R> operator) {
+        StreamOperatorFactory<R> operatorFactory;
+        if (operator instanceof StreamMap) {
+            TypeSerializer<R> serializer = outTypeInfo.createSerializer(getExecutionConfig());
+            operatorFactory =
+                    (StreamOperatorFactory<R>)
+                            new CommonCollectOperatorFactory<>(
+                                    serializer, (AbstractStreamOperator<R>) operator);
+        } else {
+            operatorFactory = SimpleOperatorFactory.of(operator);
+        }
 
-        return doTransform(operatorName, outTypeInfo, SimpleOperatorFactory.of(operator));
+        return doTransform(operatorName, outTypeInfo, operatorFactory);
     }
 
     /**

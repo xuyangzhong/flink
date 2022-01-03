@@ -136,8 +136,9 @@ public class NetUtils {
      * @see <a href="https://bugs.openjdk.java.net/browse/JDK-8237858">JDK-8237858</a>
      */
     public static Socket acceptWithoutTimeout(ServerSocket serverSocket) throws IOException {
-        Preconditions.checkArgument(
-                serverSocket.getSoTimeout() == 0, "serverSocket SO_TIMEOUT option must be 0");
+        //        Preconditions.checkArgument(
+        //                serverSocket.getSoTimeout() == 0, "serverSocket SO_TIMEOUT option must be
+        // 0");
         while (true) {
             try {
                 return serverSocket.accept();
@@ -145,6 +146,7 @@ public class NetUtils {
                 // This should be impossible given that the socket timeout is set to zero
                 // which indicates an infinite timeout. This is due to the underlying JDK-8237858
                 // bug. We retry the accept call indefinitely to replicate the expected behavior.
+                System.out.println("waiting!!!!!!!!!!!!!!!!!!!!");
             }
         }
     }

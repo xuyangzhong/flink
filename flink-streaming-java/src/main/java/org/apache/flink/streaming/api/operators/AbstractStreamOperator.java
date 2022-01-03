@@ -90,6 +90,8 @@ public abstract class AbstractStreamOperator<OUT>
                 SetupableStreamOperator<OUT>,
                 CheckpointedStreamOperator,
                 Serializable {
+    //                Serializable,
+    //                CommonCollectible<OUT> {
     private static final long serialVersionUID = 1L;
 
     /** The logger used by the operator class and its subclasses. */
@@ -108,6 +110,10 @@ public abstract class AbstractStreamOperator<OUT>
     protected transient StreamConfig config;
 
     protected transient Output<StreamRecord<OUT>> output;
+
+    //    private CommonCollectSinkFunction<OUT> collectFunction;
+    //
+    //    private TypeSerializer<OUT> serializer;
 
     private transient IndexedCombinedWatermarkStatus combinedWatermark;
 
@@ -147,6 +153,26 @@ public abstract class AbstractStreamOperator<OUT>
 
     protected transient ProcessingTimeService processingTimeService;
 
+    //    @Override
+    //    public void handleOperatorEvent(OperatorEvent evt) {
+    //        // do nothing
+    //    }
+    //
+    //    @Override
+    //    public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
+    //        collectFunction.setOperatorEventGateway(operatorEventGateway);
+    //    }
+    //
+    //    @Override
+    //    public void buildCollectFunction(String operatorId) {
+    //        this.collectFunction = new CommonCollectSinkFunction<>(serializer, 1, operatorId);
+    //    }
+    //
+    //    @Override
+    //    public void setSerializer(TypeSerializer<OUT> serializer) {
+    //        this.serializer = serializer;
+    //    }
+
     // ------------------------------------------------------------------------
     //  Life Cycle
     // ------------------------------------------------------------------------
@@ -168,6 +194,24 @@ public abstract class AbstractStreamOperator<OUT>
                     new CountingOutput<>(
                             output,
                             operatorMetricGroup.getIOMetricGroup().getNumRecordsOutCounter());
+            //
+            //            if (collectFunction == null) {
+            //                // unsupported op will not be created by CommonCollectOperatorFactory,
+            // and func will
+            //                // not be built.
+            //                this.output =
+            //                        new CountingOutput<>(
+            //                                output,
+            //
+            // operatorMetricGroup.getIOMetricGroup().getNumRecordsOutCounter());
+            //            } else {
+            //                this.output =
+            //                        new CommonCollectOutput<>(
+            //                                output,
+            //
+            // operatorMetricGroup.getIOMetricGroup().getNumRecordsOutCounter(),
+            //                                collectFunction);
+            //            }
             if (config.isChainEnd()) {
                 operatorMetricGroup.getIOMetricGroup().reuseOutputMetricsForTask();
             }
@@ -237,6 +281,9 @@ public abstract class AbstractStreamOperator<OUT>
 
         stateKeySelector1 = config.getStatePartitioner(0, getUserCodeClassloader());
         stateKeySelector2 = config.getStatePartitioner(1, getUserCodeClassloader());
+        //        if (collectFunction != null) {
+        //            FunctionUtils.setFunctionRuntimeContext(collectFunction, getRuntimeContext());
+        //        }
     }
 
     /**
@@ -320,10 +367,26 @@ public abstract class AbstractStreamOperator<OUT>
      * @throws Exception An exception in this method causes the operator to fail.
      */
     @Override
-    public void open() throws Exception {}
+    public void open() throws Exception {
+        //        if (collectFunction == null) {
+        //            // unsupported op will not be created by CommonCollectOperatorFactory, and
+        // func will not
+        //            // be built.
+        //            return;
+        //        }
+        //        FunctionUtils.openFunction(collectFunction, new Configuration());
+    }
 
     @Override
-    public void finish() throws Exception {}
+    public void finish() throws Exception {
+        //        if (collectFunction == null) {
+        //            // unsupported op will not be created by CommonCollectOperatorFactory, and
+        // func will not
+        //            // be built.
+        //            return;
+        //        }
+        //        this.collectFunction.finish();
+    }
 
     @Override
     public void close() throws Exception {
@@ -363,7 +426,9 @@ public abstract class AbstractStreamOperator<OUT>
      * @param context context that provides information and means required for taking a snapshot
      */
     @Override
-    public void snapshotState(StateSnapshotContext context) throws Exception {}
+    public void snapshotState(StateSnapshotContext context) throws Exception {
+        //        collectFunction.snapshotState(context);
+    }
 
     /**
      * Stream operators with state which can be restored need to override this hook method.
@@ -371,16 +436,38 @@ public abstract class AbstractStreamOperator<OUT>
      * @param context context that allows to register different states.
      */
     @Override
-    public void initializeState(StateInitializationContext context) throws Exception {}
+    public void initializeState(StateInitializationContext context) throws Exception {
+        //        if (collectFunction == null) {
+        //            // unsupported op will not be created by CommonCollectOperatorFactory, and
+        // func will not
+        //            // be built.
+        //            return;
+        //        }
+        //        collectFunction.initializeState(context);
+    }
 
     @Override
     public void notifyCheckpointComplete(long checkpointId) throws Exception {
         stateHandler.notifyCheckpointComplete(checkpointId);
+        //        if (collectFunction == null) {
+        //            // unsupported op will not be created by CommonCollectOperatorFactory, and
+        // func will not
+        //            // be built.
+        //            return;
+        //        }
+        //        collectFunction.notifyCheckpointComplete(checkpointId);
     }
 
     @Override
     public void notifyCheckpointAborted(long checkpointId) throws Exception {
         stateHandler.notifyCheckpointAborted(checkpointId);
+        //        if (collectFunction == null) {
+        //            // unsupported op will not be created by CommonCollectOperatorFactory, and
+        // func will not
+        //            // be built.
+        //            return;
+        //        }
+        //        collectFunction.notifyCheckpointAborted(checkpointId);
     }
 
     // ------------------------------------------------------------------------
