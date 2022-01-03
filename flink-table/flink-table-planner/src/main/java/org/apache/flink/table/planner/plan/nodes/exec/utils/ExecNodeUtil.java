@@ -27,7 +27,6 @@ import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
 import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
 import org.apache.flink.streaming.api.operators.SimpleInputFormatOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleOutputFormatOperatorFactory;
@@ -100,7 +99,7 @@ public class ExecNodeUtil {
         } else if (operator instanceof StreamSink
                 && ((StreamSink) operator).getUserFunction() instanceof OutputFormatSinkFunction) {
             factory = new SimpleOutputFormatOperatorFactory((StreamSink) operator);
-        } else if (operator instanceof AbstractUdfStreamOperator
+        } else if (operator instanceof AbstractStreamOperator
                 && operator instanceof CommonCollectible) {
             TypeSerializer<O> serializer = outputType.createSerializer(new ExecutionConfig());
             factory =

@@ -36,6 +36,7 @@ import org.apache.flink.util.StringUtils;
 import javax.annotation.Nullable;
 
 import java.util.List;
+import java.util.function.Consumer;
 
 /** Default implementation of {@link Executor}. */
 @Internal
@@ -44,6 +45,8 @@ public class DefaultExecutor implements Executor {
     private static final String DEFAULT_JOB_NAME = "Flink Exec Table Job";
 
     private final StreamExecutionEnvironment executionEnvironment;
+
+    private Consumer<JobClient> callback;
 
     public DefaultExecutor(StreamExecutionEnvironment executionEnvironment) {
         this.executionEnvironment = executionEnvironment;
@@ -92,7 +95,11 @@ public class DefaultExecutor implements Executor {
 
     @Override
     public JobClient executeAsync(Pipeline pipeline) throws Exception {
-        return executionEnvironment.executeAsync((StreamGraph) pipeline);
+        JobClient client = executionEnvironment.executeAsync((StreamGraph) pipeline);
+        if (callback != null) {
+            callback.accept(client);
+        }
+        return client;
     }
 
     private void configureBatchSpecificProperties() {
@@ -107,5 +114,9 @@ public class DefaultExecutor implements Executor {
         final String jobName =
                 getConfiguration().getOptional(PipelineOptions.NAME).orElse(adjustedDefaultJobName);
         streamGraph.setJobName(jobName);
+    }
+
+    public void setSubmitCallback(Consumer<JobClient> callback) {
+        this.callback = callback;
     }
 }

@@ -144,7 +144,6 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
     public Transformation<T> translateToPlan(Planner planner) {
         if (transformation == null) {
             transformation = translateToPlanInternal((PlannerBase) planner);
-            registerExecNode((PlannerBase) planner);
             if (this instanceof SingleTransformationTranslator) {
                 if (inputsContainSingleton()) {
                     transformation.setParallelism(1);
@@ -156,14 +155,11 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         return transformation;
     }
 
-    private void registerExecNode(PlannerBase planner) {
+    public void registerExecNode(String jobId, PlannerBase planner) {
         if (!supportConsume()) {
             return;
         }
-        String jobId = planner.getTableConfig().getConfiguration().get(PIPELINE_FIXED_JOB_ID);
-        if (jobId == null) {
-            return;
-        }
+
         String operatorId = "op_" + getId();
         String digest = getDigest();
         Schema schema =

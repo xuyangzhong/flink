@@ -29,22 +29,21 @@ import org.apache.flink.table.module.ModuleManager
 import org.apache.flink.table.operations.{CatalogSinkModifyOperation, ModifyOperation, Operation, QueryOperation}
 import org.apache.flink.table.planner.operations.PlannerQueryOperation
 import org.apache.flink.table.planner.plan.`trait`._
-import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeGraph
+import org.apache.flink.table.planner.plan.nodes.exec.{ExecNode, ExecNodeBase, ExecNodeGraph}
 import org.apache.flink.table.planner.plan.nodes.exec.processor.{ExecNodeGraphProcessor, ReuseExecNodeGraphProcessor}
 import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecNode
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodePlanDumper
 import org.apache.flink.table.planner.plan.optimize.{Optimizer, StreamCommonSubGraphBasedOptimizer}
 import org.apache.flink.table.planner.plan.utils.FlinkRelOptUtil
 import org.apache.flink.table.planner.utils.DummyStreamExecutionEnvironment
-
 import org.apache.calcite.plan.{ConventionTraitDef, RelTrait, RelTraitDef}
 import org.apache.calcite.rel.logical.LogicalTableModify
 import org.apache.calcite.sql.SqlExplainLevel
 import org.apache.flink.configuration.PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID
 import org.apache.flink.table.planner.plan.nodes.exec.common.{CommonExecLegacySink, CommonExecSink}
+import org.apache.flink.table.planner.plan.nodes.exec.visitor.AbstractExecNodeExactlyOnceVisitor
 
 import java.util
-
 import _root_.scala.collection.JavaConversions._
 
 class StreamPlanner(
@@ -73,18 +72,27 @@ class StreamPlanner(
 
   override protected def translateToPlan(execGraph: ExecNodeGraph): util.List[Transformation[_]] = {
 
-    if (execGraph.getRootNodes.size() != 1
-      || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink]
-      || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecLegacySink[_]]) {
-      val jobId = new JobID().toHexString
-      val properties = new util.HashMap[String, String]()
-      properties.put("type", "job")
-      catalogManager.getCatalog(catalogManager.getCurrentCatalog).get().createDatabase(
-        jobId, new CatalogDatabaseImpl(properties, ""), false)
-      config.getConfiguration.set(PIPELINE_FIXED_JOB_ID, jobId)
-    } else {
-      config.getConfiguration.removeConfig(PIPELINE_FIXED_JOB_ID)
-    }
+    executor.setSubmitCallback(client => {
+      val jobId = client.getJobID.toHexString;
+      if (execGraph.getRootNodes.size() != 1
+        || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink]
+        || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecLegacySink[_]]) {
+        val properties = new util.HashMap[String, String]()
+        properties.put("type", "job")
+        catalogManager.getCatalog(catalogManager.getCurrentCatalog).get().createDatabase(
+          jobId, new CatalogDatabaseImpl(properties, ""), false)
+      }
+
+      val visitor = new AbstractExecNodeExactlyOnceVisitor {
+        override protected def visitNode(node: ExecNode[_]): Unit = {
+          if (node.isInstanceOf[ExecNodeBase[_]]) {
+            node.asInstanceOf[ExecNodeBase[_]].registerExecNode(jobId, StreamPlanner.this)
+          }
+          visitInputs(node)
+        }
+      }
+      execGraph.getRootNodes.forEach((n: ExecNode[_]) => n.accept(visitor))
+    })
 
     validateAndOverrideConfiguration()
 
