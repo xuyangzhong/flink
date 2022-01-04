@@ -104,7 +104,7 @@ public class ExecNodeUtil {
                     new TableCollectOperatorFactory(
                             serializer, (AbstractUdfStreamOperatorWithCollector) operator);
         } else {
-            factory = new SimpleOperatorFactory(operator);
+            factory = SimpleOperatorFactory.of(operator);
         }
 
         return createOneInputTransformation(

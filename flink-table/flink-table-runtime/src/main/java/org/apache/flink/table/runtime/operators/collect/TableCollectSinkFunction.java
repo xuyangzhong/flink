@@ -120,6 +120,9 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
     @Override
     public void invoke(IN value) throws Exception {
         synchronized (buffers) {
+            if (buffers.isEmpty()) {
+                return;
+            }
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             DataOutputViewStreamWrapper wrapper = new DataOutputViewStreamWrapper(baos);
             serializer.serialize(value, wrapper);

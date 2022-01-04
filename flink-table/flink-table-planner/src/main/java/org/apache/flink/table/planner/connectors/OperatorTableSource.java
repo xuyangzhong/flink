@@ -26,6 +26,7 @@ import org.apache.flink.table.connector.source.SourceFunctionProvider;
 import org.apache.flink.table.connectors.mv.OperatorOutputSubscriber;
 import org.apache.flink.table.types.logical.RowType;
 
+/** OperatorTableSource. */
 public class OperatorTableSource implements ScanTableSource {
 
     private final String endpoint;
