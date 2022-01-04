@@ -26,7 +26,6 @@ import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.core.memory.ManagedMemoryUseCase;
 import org.apache.flink.streaming.api.functions.sink.OutputFormatSinkFunction;
 import org.apache.flink.streaming.api.functions.source.InputFormatSourceFunction;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
 import org.apache.flink.streaming.api.operators.SimpleInputFormatOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.SimpleOutputFormatOperatorFactory;
@@ -35,14 +34,14 @@ import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamSink;
 import org.apache.flink.streaming.api.operators.StreamSource;
 import org.apache.flink.streaming.api.operators.TwoInputStreamOperator;
-import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectOperatorFactory;
-import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectible;
 import org.apache.flink.streaming.api.transformations.LegacySourceTransformation;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.streaming.api.transformations.TwoInputTransformation;
 import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
+import org.apache.flink.table.runtime.operators.collect.AbstractUdfStreamOperatorWithCollector;
+import org.apache.flink.table.runtime.operators.collect.TableCollectOperatorFactory;
 
 import java.util.List;
 import java.util.Optional;
@@ -99,12 +98,11 @@ public class ExecNodeUtil {
         } else if (operator instanceof StreamSink
                 && ((StreamSink) operator).getUserFunction() instanceof OutputFormatSinkFunction) {
             factory = new SimpleOutputFormatOperatorFactory((StreamSink) operator);
-        } else if (operator instanceof AbstractStreamOperator
-                && operator instanceof CommonCollectible) {
+        } else if (operator instanceof AbstractUdfStreamOperatorWithCollector) {
             TypeSerializer<O> serializer = outputType.createSerializer(new ExecutionConfig());
             factory =
-                    new CommonCollectOperatorFactory(
-                            serializer, (AbstractStreamOperator<O>) operator);
+                    new TableCollectOperatorFactory(
+                            serializer, (AbstractUdfStreamOperatorWithCollector) operator);
         } else {
             factory = new SimpleOperatorFactory(operator);
         }

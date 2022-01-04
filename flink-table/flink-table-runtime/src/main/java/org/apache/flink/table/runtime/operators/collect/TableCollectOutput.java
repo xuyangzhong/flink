@@ -16,9 +16,8 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
-import org.apache.flink.metrics.Counter;
 import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.LatencyMarker;
@@ -32,20 +31,21 @@ import org.slf4j.LoggerFactory;
 /**
  * Wrapping {@link Output} that updates metrics on the number of emitted elements for collecting.
  */
-public class CommonCollectOutput<OUT> implements Output<StreamRecord<OUT>> {
-    private static final Logger LOG = LoggerFactory.getLogger(CommonCollectSinkFunction.class);
+public class TableCollectOutput<OUT> implements Output<StreamRecord<OUT>> {
+    private static final Logger LOG = LoggerFactory.getLogger(TableCollectSinkFunction.class);
 
     private final Output<StreamRecord<OUT>> output;
-    private final Counter numRecordsOut;
-    private final CommonCollectSinkFunction<OUT> collectFunc;
+    private final TableCollectSinkFunction<OUT> collectFunc;
+    private boolean collectEnabled;
 
-    public CommonCollectOutput(
-            Output<StreamRecord<OUT>> output,
-            Counter counter,
-            CommonCollectSinkFunction<OUT> collectFunc) {
+    public TableCollectOutput(
+            Output<StreamRecord<OUT>> output, TableCollectSinkFunction<OUT> collectFunc) {
         this.output = output;
-        this.numRecordsOut = counter;
         this.collectFunc = collectFunc;
+    }
+
+    public void setCollectEnabled(boolean isEnabled) {
+        collectEnabled = isEnabled;
     }
 
     @Override
@@ -65,9 +65,8 @@ public class CommonCollectOutput<OUT> implements Output<StreamRecord<OUT>> {
 
     @Override
     public void collect(StreamRecord<OUT> record) {
-        numRecordsOut.inc();
         output.collect(record);
-        if (collectFunc == null) {
+        if (collectFunc == null || !collectEnabled) {
             return;
         }
         try {
@@ -79,7 +78,6 @@ public class CommonCollectOutput<OUT> implements Output<StreamRecord<OUT>> {
 
     @Override
     public <X> void collect(OutputTag<X> outputTag, StreamRecord<X> record) {
-        numRecordsOut.inc();
         output.collect(outputTag, record);
     }
 

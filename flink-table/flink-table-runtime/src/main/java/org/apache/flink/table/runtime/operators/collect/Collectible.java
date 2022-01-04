@@ -16,29 +16,32 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
+import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 
 /** An interface for operators to enable to be collected outputs by client. */
-public interface CommonCollectible<OUT> extends OperatorEventHandler {
+public interface Collectible<OUT> extends OperatorEventHandler {
     int BATCH_SIZE = 1;
 
-    default CommonCollectSinkFunction<OUT> getCollectFunction(
+    default TableCollectSinkFunction<OUT> getCollectFunction(
             TypeSerializer<OUT> serializer, long batchSize, String operatorId) {
-        return new CommonCollectSinkFunction<>(serializer, batchSize, operatorId);
+        return new TableCollectSinkFunction<>(serializer, batchSize, operatorId);
     }
 
-    default CommonCollectSinkFunction<OUT> getCollectFunction(
+    default TableCollectSinkFunction<OUT> getCollectFunction(
             TypeSerializer<OUT> serializer, String operatorId) {
-        return new CommonCollectSinkFunction<>(serializer, BATCH_SIZE, operatorId);
+        return new TableCollectSinkFunction<>(serializer, BATCH_SIZE, operatorId);
     }
 
     void setOperatorEventGateway(OperatorEventGateway operatorEventGateway);
 
-    void buildCollectFunction(String operatorId);
+    void buildCollectFunction(String operatorId, MailboxExecutor executor);
 
     void setSerializer(TypeSerializer<OUT> serializer);
+
+    void startConsume(long subscribeID);
 }

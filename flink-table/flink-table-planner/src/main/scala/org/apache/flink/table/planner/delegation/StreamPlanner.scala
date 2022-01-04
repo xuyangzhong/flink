@@ -72,7 +72,7 @@ class StreamPlanner(
 
   override protected def translateToPlan(execGraph: ExecNodeGraph): util.List[Transformation[_]] = {
 
-    executor.setSubmitCallback(client => {
+    executor.setSubmitCallback((client, streamGraph) => {
       val jobId = client.getJobID.toHexString;
       if (execGraph.getRootNodes.size() != 1
         || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink]
@@ -86,7 +86,8 @@ class StreamPlanner(
       val visitor = new AbstractExecNodeExactlyOnceVisitor {
         override protected def visitNode(node: ExecNode[_]): Unit = {
           if (node.isInstanceOf[ExecNodeBase[_]]) {
-            node.asInstanceOf[ExecNodeBase[_]].registerExecNode(jobId, StreamPlanner.this)
+            node.asInstanceOf[ExecNodeBase[_]]
+              .registerExecNode(jobId, StreamPlanner.this, streamGraph)
           }
           visitInputs(node)
         }

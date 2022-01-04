@@ -290,4 +290,9 @@ public class StreamExecGlobalGroupAggregate extends StreamExecAggregateBase {
                 .needMerge(mergedAccOffset, true, mergedAccExternalTypes)
                 .generateAggsHandler(name, aggInfoList);
     }
+
+    @Override
+    public boolean supportConsume() {
+        return true;
+    }
 }

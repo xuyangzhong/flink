@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
 import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputViewStreamWrapper;
@@ -54,12 +54,12 @@ import java.util.concurrent.Executors;
  * Similar with {@link CollectSinkOperatorCoordinator}. However, this class is for more common
  * operators ant not just for {@link CollectSinkFunction}
  */
-public class CommonCollectSinkOperatorCoordinator
+public class TableCollectSinkOperatorCoordinator
         implements OperatorCoordinator, CoordinationRequestHandler {
     private static final Logger LOG =
-            LoggerFactory.getLogger(CommonCollectSinkOperatorCoordinator.class);
+            LoggerFactory.getLogger(TableCollectSinkOperatorCoordinator.class);
 
-    private static CommonCollectSinkOperatorCoordinator instance;
+    private static TableCollectSinkOperatorCoordinator instance;
 
     private static final long DEFAULT_BATCH_SIZE = 10;
 
@@ -73,7 +73,7 @@ public class CommonCollectSinkOperatorCoordinator
 
     private ExecutorService executorService;
 
-    private CommonCollectSinkOperatorCoordinator(int socketTimeout) {
+    private TableCollectSinkOperatorCoordinator(int socketTimeout) {
         this.socketTimeout = socketTimeout;
     }
 
@@ -94,10 +94,10 @@ public class CommonCollectSinkOperatorCoordinator
     @Override
     public void handleEventFromOperator(int subtask, OperatorEvent event) throws Exception {
         Preconditions.checkArgument(
-                event instanceof CommonCollectSinkAddressEvent,
+                event instanceof TableCollectSinkAddressEvent,
                 "Operator event must be a CommonCollectSinkAddressEvent");
-        String operatorId = ((CommonCollectSinkAddressEvent) event).getOperatorId();
-        InetSocketAddress address = ((CommonCollectSinkAddressEvent) event).getAddress();
+        String operatorId = ((TableCollectSinkAddressEvent) event).getOperatorId();
+        InetSocketAddress address = ((TableCollectSinkAddressEvent) event).getAddress();
 
         LOG.info("Received operator id : " + operatorId + " : server address: " + address);
         if (ipLists == null || operatorId == null || operatorId.equals("")) {
@@ -114,11 +114,10 @@ public class CommonCollectSinkOperatorCoordinator
     public CompletableFuture<CoordinationResponse> handleCoordinationRequest(
             CoordinationRequest request) {
         Preconditions.checkArgument(
-                request instanceof CommonCollectCoordinationRequest,
+                request instanceof TableCollectCoordinationRequest,
                 "Coordination request must be a CollectCoordinationRequest");
 
-        CommonCollectCoordinationRequest collectRequest =
-                (CommonCollectCoordinationRequest) request;
+        TableCollectCoordinationRequest collectRequest = (TableCollectCoordinationRequest) request;
         CompletableFuture<CoordinationResponse> responseFuture = new CompletableFuture<>();
 
         if (ipLists == null || ipLists.size() == 0) {
@@ -131,7 +130,7 @@ public class CommonCollectSinkOperatorCoordinator
     }
 
     private void handleRequestImpl(
-            CommonCollectCoordinationRequest request,
+            TableCollectCoordinationRequest request,
             CompletableFuture<CoordinationResponse> responseFuture) {
         String operatorId = request.getOperatorId();
         if (operatorId == null || operatorId.equals("")) {
@@ -179,7 +178,7 @@ public class CommonCollectSinkOperatorCoordinator
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Fetching serialized result from common collect sink socket server");
             }
-            responseFuture.complete(new CommonCollectCoordinationResponse(inStream));
+            responseFuture.complete(new TableCollectCoordinationResponse(inStream));
         } catch (Exception e) {
             // request failed, close current connection and send back empty results
             // we catch every exception here because socket might suddenly be null if the sink
@@ -194,12 +193,12 @@ public class CommonCollectSinkOperatorCoordinator
     }
 
     private void completeWithEmptyResponse(
-            CommonCollectCoordinationRequest request,
+            TableCollectCoordinationRequest request,
             CompletableFuture<CoordinationResponse> future,
             String operatorId,
             int subtaskId) {
         future.complete(
-                new CommonCollectCoordinationResponse(
+                new TableCollectCoordinationResponse(
                         request.isOpen(),
                         DEFAULT_BATCH_SIZE,
                         operatorId,
@@ -251,7 +250,7 @@ public class CommonCollectSinkOperatorCoordinator
     }
 
     @Override
-    public void subtaskReady(int subtask, OperatorCoordinator.SubtaskGateway gateway) {
+    public void subtaskReady(int subtask, SubtaskGateway gateway) {
         // nothing to do here, connections are re-created lazily
     }
 
@@ -298,10 +297,10 @@ public class CommonCollectSinkOperatorCoordinator
         }
 
         @Override
-        public OperatorCoordinator create(OperatorCoordinator.Context context) {
+        public OperatorCoordinator create(Context context) {
             // we do not send operator event so we don't need a context
             if (instance == null) {
-                instance = new CommonCollectSinkOperatorCoordinator(socketTimeout);
+                instance = new TableCollectSinkOperatorCoordinator(socketTimeout);
             }
             return instance;
         }

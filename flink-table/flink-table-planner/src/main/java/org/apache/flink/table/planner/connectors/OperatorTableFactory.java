@@ -46,13 +46,15 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
     @Override
     public DynamicTableSource createDynamicTableSource(Context context) {
         Map<String, String> properties = context.getCatalogTable().getOptions();
+        String endpoint = properties.getOrDefault("endpoint", "http://localhost:8080");
         String jobId = properties.get("job_id");
+        int parallelism = Integer.valueOf(properties.getOrDefault("parallelism", "1"));
         RowType rowType = (RowType) context.getPhysicalRowDataType().getLogicalType();
         return new OperatorTableSource(
-                "http://localhost:8080",
+                endpoint,
                 jobId,
                 fromUID(context.getObjectIdentifier().getObjectName()),
-                2,
+                parallelism,
                 rowType);
     }
 

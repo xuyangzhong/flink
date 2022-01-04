@@ -36,11 +36,13 @@ public class CatalogOpTable implements CatalogTable {
     private final Schema schema;
     private final int id;
     private final Map<String, String> options;
+    private final String comment;
 
-    public CatalogOpTable(Schema schema, int id, Map<String, String> options) {
+    public CatalogOpTable(Schema schema, int id, Map<String, String> options, String comment) {
         this.schema = checkNotNull(schema, "Schema must not be null.");
         this.id = id;
         this.options = checkNotNull(options, "Options must not be null.");
+        this.comment = comment;
 
         checkArgument(
                 options.entrySet().stream()
@@ -55,7 +57,7 @@ public class CatalogOpTable implements CatalogTable {
 
     @Override
     public String getComment() {
-        return "";
+        return comment;
     }
 
     @Override
@@ -75,12 +77,12 @@ public class CatalogOpTable implements CatalogTable {
 
     @Override
     public CatalogBaseTable copy() {
-        return new CatalogOpTable(schema, id, options);
+        return new CatalogOpTable(schema, id, options, comment);
     }
 
     @Override
     public CatalogTable copy(Map<String, String> options) {
-        return new CatalogOpTable(schema, id, options);
+        return new CatalogOpTable(schema, id, options, comment);
     }
 
     @Override
@@ -90,7 +92,7 @@ public class CatalogOpTable implements CatalogTable {
 
     @Override
     public Optional<String> getDetailedDescription() {
-        return Optional.empty();
+        return Optional.of(getComment());
     }
 
     @Override

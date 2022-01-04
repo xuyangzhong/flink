@@ -36,7 +36,7 @@ import org.apache.flink.util.StringUtils;
 import javax.annotation.Nullable;
 
 import java.util.List;
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 
 /** Default implementation of {@link Executor}. */
 @Internal
@@ -46,7 +46,7 @@ public class DefaultExecutor implements Executor {
 
     private final StreamExecutionEnvironment executionEnvironment;
 
-    private Consumer<JobClient> callback;
+    private BiConsumer<JobClient, Pipeline> callback;
 
     public DefaultExecutor(StreamExecutionEnvironment executionEnvironment) {
         this.executionEnvironment = executionEnvironment;
@@ -97,7 +97,7 @@ public class DefaultExecutor implements Executor {
     public JobClient executeAsync(Pipeline pipeline) throws Exception {
         JobClient client = executionEnvironment.executeAsync((StreamGraph) pipeline);
         if (callback != null) {
-            callback.accept(client);
+            callback.accept(client, pipeline);
         }
         return client;
     }
@@ -116,7 +116,7 @@ public class DefaultExecutor implements Executor {
         streamGraph.setJobName(jobName);
     }
 
-    public void setSubmitCallback(Consumer<JobClient> callback) {
+    public void setSubmitCallback(BiConsumer<JobClient, Pipeline> callback) {
         this.callback = callback;
     }
 }

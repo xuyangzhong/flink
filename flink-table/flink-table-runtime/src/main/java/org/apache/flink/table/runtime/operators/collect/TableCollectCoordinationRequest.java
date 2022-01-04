@@ -15,70 +15,74 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.BooleanSerializer;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
-import org.apache.flink.api.common.typeutils.base.ListSerializer;
 import org.apache.flink.api.common.typeutils.base.LongSerializer;
 import org.apache.flink.api.common.typeutils.base.StringSerializer;
-import org.apache.flink.api.common.typeutils.base.array.BytePrimitiveArraySerializer;
 import org.apache.flink.core.memory.DataInputView;
-import org.apache.flink.core.memory.DataInputViewStreamWrapper;
 import org.apache.flink.core.memory.DataOutputView;
-import org.apache.flink.runtime.operators.coordination.CoordinationResponse;
-import org.apache.flink.streaming.api.operators.collect.CollectSinkFunction;
+import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
 
-import java.io.ByteArrayInputStream;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
- * A {@link CoordinationResponse} from the coordinator containing the required batch or new results
- * and other necessary information in serialized form.
+ * A {@link CoordinationRequest} from the client indicating that it wants a new batch of query
+ * results.
  *
  * <p>For an explanation of this communication protocol, see Java docs in {@link
- * CollectSinkFunction}.
+ * TableCollectSinkFunction}.
  */
-public class CommonCollectCoordinationResponse implements CoordinationResponse {
+public class TableCollectCoordinationRequest implements CoordinationRequest {
 
     private static final long serialVersionUID = 1L;
 
+    private static final TypeSerializer<Long> idSerializer = LongSerializer.INSTANCE;
     private static final TypeSerializer<Boolean> isOpenSerializer = BooleanSerializer.INSTANCE;
+    private static final TypeSerializer<Boolean> isBatchSerializer = BooleanSerializer.INSTANCE;
     private static final TypeSerializer<Long> batchSizeSerializer = LongSerializer.INSTANCE;
     private static final TypeSerializer<String> operatorIdSerializer = StringSerializer.INSTANCE;
     private static final TypeSerializer<Integer> subtaskIdSerializer = IntSerializer.INSTANCE;
 
-    private static final ListSerializer<byte[]> bufferSerializer =
-            new ListSerializer<>(BytePrimitiveArraySerializer.INSTANCE);
-
+    private final long id;
     private final boolean isOpen;
+    private final boolean isBounded;
     private final long batchSize;
     private final String operatorId;
     private final int subtaskId;
-    private final List<byte[]> serializedResults;
 
-    public CommonCollectCoordinationResponse(
+    public TableCollectCoordinationRequest(
+            long id,
             boolean isOpen,
+            boolean isBounded,
             long batchSize,
             String operatorId,
-            int subtaskId,
-            List<byte[]> serializedResults) {
+            int subtaskId) {
+        this.id = id;
         this.isOpen = isOpen;
         this.batchSize = batchSize;
         this.operatorId = operatorId;
         this.subtaskId = subtaskId;
-        this.serializedResults = serializedResults;
+        this.isBounded = isBounded;
     }
 
-    public CommonCollectCoordinationResponse(DataInputView inView) throws IOException {
+    public TableCollectCoordinationRequest(DataInputView inView) throws IOException {
+        this.id = idSerializer.deserialize(inView);
         this.isOpen = isOpenSerializer.deserialize(inView);
+        this.isBounded = isBatchSerializer.deserialize(inView);
         this.batchSize = batchSizeSerializer.deserialize(inView);
         this.operatorId = operatorIdSerializer.deserialize(inView);
         this.subtaskId = subtaskIdSerializer.deserialize(inView);
-        this.serializedResults = bufferSerializer.deserialize(inView);
+    }
+
+    public long getId() {
+        return id;
+    }
+
+    public boolean isBounded() {
+        return isBounded;
     }
 
     public boolean isOpen() {
@@ -97,27 +101,16 @@ public class CommonCollectCoordinationResponse implements CoordinationResponse {
         return subtaskId;
     }
 
-    public <T> List<T> getResults(TypeSerializer<T> elementSerializer) throws IOException {
-        List<T> results = new ArrayList<>();
-        for (byte[] serializedResult : serializedResults) {
-            ByteArrayInputStream bais = new ByteArrayInputStream(serializedResult);
-            DataInputViewStreamWrapper wrapper = new DataInputViewStreamWrapper(bais);
-            results.add(elementSerializer.deserialize(wrapper));
-        }
-        return results;
-    }
-
     public void serialize(DataOutputView outView) throws IOException {
         isOpenSerializer.serialize(isOpen, outView);
         batchSizeSerializer.serialize(batchSize, outView);
         operatorIdSerializer.serialize(operatorId, outView);
         subtaskIdSerializer.serialize(subtaskId, outView);
-        bufferSerializer.serialize(serializedResults, outView);
     }
 
     @Override
     public String toString() {
-        return "CommonCollectCoordinationResponse{"
+        return "CommonCollectCoordinationRequest{"
                 + "isOpen="
                 + isOpen
                 + ", batchSize="
@@ -127,8 +120,6 @@ public class CommonCollectCoordinationResponse implements CoordinationResponse {
                 + '\''
                 + ", subtaskId="
                 + subtaskId
-                + ", serializedResults="
-                + serializedResults
                 + '}';
     }
 }

@@ -27,13 +27,16 @@ import org.apache.flink.configuration.Configuration;
 import org.apache.flink.runtime.jobgraph.JobVertexID;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.streaming.api.functions.source.SourceFunction;
-import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectCoordinationRequest;
-import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectCoordinationResponse;
 import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.operators.collect.TableCollectCoordinationRequest;
+import org.apache.flink.table.runtime.operators.collect.TableCollectCoordinationResponse;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class OperatorIncrementSubscriber
         implements SourceFunction<RowData>, ResultTypeQueryable<RowData> {
@@ -43,6 +46,7 @@ public class OperatorIncrementSubscriber
     private final String operatorId;
     private final int parallelism;
     private final RowType rowType;
+    private final HashMap<Integer, Long> ids = new HashMap<>();
 
     public OperatorIncrementSubscriber(
             String endpoint, String jobId, String operatorId, int parallelism, RowType rowType) {
@@ -61,23 +65,52 @@ public class OperatorIncrementSubscriber
 
         TypeSerializer<RowData> typeSerializer =
                 InternalTypeInfo.of(rowType).createSerializer(new ExecutionConfig());
+        Set<Integer> finished = new HashSet<>();
         while (true) {
             for (int subtask = 0; subtask < parallelism; subtask++) {
-                CommonCollectCoordinationRequest request =
-                        new CommonCollectCoordinationRequest(true, 1, opId.toString(), subtask);
-                CommonCollectCoordinationResponse response =
-                        (CommonCollectCoordinationResponse)
+                if (finished.contains(subtask)) {
+                    continue;
+                }
+
+                TableCollectCoordinationRequest request =
+                        new TableCollectCoordinationRequest(
+                                ids.getOrDefault(subtask, -1L),
+                                true,
+                                false,
+                                1,
+                                opId.toString(),
+                                subtask);
+                TableCollectCoordinationResponse response =
+                        (TableCollectCoordinationResponse)
                                 client.sendCoordinationRequest(jId, opId, request).get();
+                ids.putIfAbsent(subtask, response.getId());
                 List<RowData> cdcLog = response.getResults(typeSerializer);
                 if (cdcLog != null) {
                     cdcLog.forEach(ctx::collect);
+                }
+                if (!response.isOpen()) {
+                    finished.add(subtask);
                 }
             }
         }
     }
 
     @Override
-    public void cancel() {}
+    public void cancel() {
+        try {
+            FlinkClusterRestClient client =
+                    new FlinkClusterRestClient(endpoint, new Configuration());
+            JobID jId = JobID.fromHexString(jobId);
+            OperatorID opId = OperatorID.fromJobVertexID(JobVertexID.fromHexString(operatorId));
+            for (int subtask = 0; subtask < parallelism; subtask++) {
+                TableCollectCoordinationRequest request =
+                        new TableCollectCoordinationRequest(
+                                ids.get(subtask), false, false, 1, opId.toString(), subtask);
+                client.sendCoordinationRequest(jId, opId, request).get();
+            }
+        } catch (Exception ignored) {
+        }
+    }
 
     @Override
     public TypeInformation<RowData> getProducedType() {

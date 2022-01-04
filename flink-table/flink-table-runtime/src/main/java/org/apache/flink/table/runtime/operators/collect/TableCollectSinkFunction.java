@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
 import org.apache.flink.api.common.functions.RuntimeContext;
 import org.apache.flink.api.common.state.CheckpointListener;
@@ -45,8 +45,10 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Similar with {@link CollectSinkFunction}, the difference is following:
@@ -57,16 +59,14 @@ import java.util.List;
  *
  * <p>This class will end collecting data until it gets the stopping signal from client.
  */
-public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
+public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
         implements CheckpointedFunction, CheckpointListener {
 
     private static final long serialVersionUID = 1L;
 
-    private static final Logger LOG = LoggerFactory.getLogger(CommonCollectSinkFunction.class);
+    private static final Logger LOG = LoggerFactory.getLogger(TableCollectSinkFunction.class);
 
     private final TypeSerializer<IN> serializer;
-
-    private transient long currentSize;
 
     //	private transient long batchSize;
     private final long batchSize;
@@ -75,32 +75,27 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
 
     private transient OperatorEventGateway eventGateway;
 
-    private transient LinkedList<byte[]> buffer;
+    private final transient Map<Long, LinkedList<byte[]>> buffers = new HashMap<>();
 
     private transient ServerThread serverThread;
 
-    private transient boolean isNeedToOutput = true;
+    private Collectible<IN> collectible;
 
-    public CommonCollectSinkFunction(
+    private long nextId = 0;
+
+    public TableCollectSinkFunction(
             TypeSerializer<IN> serializer, long batchSize, String operatorId) {
         this.serializer = serializer;
         this.batchSize = batchSize;
         this.operatorId = operatorId;
     }
 
-    private void initBuffer() {
-        if (buffer != null) {
-            return;
-        }
-
-        buffer = new LinkedList<>();
-        currentSize = 0;
+    private void initBuffer(long id) {
+        buffers.put(id, new LinkedList<>());
     }
 
     @Override
-    public void initializeState(FunctionInitializationContext context) throws Exception {
-        initBuffer();
-    }
+    public void initializeState(FunctionInitializationContext context) throws Exception {}
 
     @Override
     public void snapshotState(FunctionSnapshotContext context) throws Exception {
@@ -109,8 +104,6 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
 
     @Override
     public void open(Configuration parameters) throws Exception {
-        initBuffer();
-
         serverThread = new ServerThread(serializer);
         serverThread.start();
 
@@ -119,23 +112,30 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
         InetSocketAddress address = serverThread.getServerSocketAddress();
         LOG.info("Common Collect sink server established, address = " + address);
 
-        CommonCollectSinkAddressEvent addressEvent =
-                new CommonCollectSinkAddressEvent(operatorId, address);
+        TableCollectSinkAddressEvent addressEvent =
+                new TableCollectSinkAddressEvent(operatorId, address);
         eventGateway.sendEventToCoordinator(addressEvent);
     }
 
     @Override
     public void invoke(IN value) throws Exception {
-        if (!isNeedToOutput) {
-            return;
-        }
-        synchronized (buffer) {
+        synchronized (buffers) {
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
             DataOutputViewStreamWrapper wrapper = new DataOutputViewStreamWrapper(baos);
             serializer.serialize(value, wrapper);
+            byte[] data = baos.toByteArray();
+            buffers.values().forEach(buffer -> buffer.add(data));
+        }
+    }
 
-            buffer.add(baos.toByteArray());
-            currentSize++;
+    public void invoke(IN value, long id) throws Exception {
+        synchronized (buffers) {
+            buffers.putIfAbsent(id, new LinkedList<>());
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            DataOutputViewStreamWrapper wrapper = new DataOutputViewStreamWrapper(baos);
+            serializer.serialize(value, wrapper);
+            byte[] data = baos.toByteArray();
+            buffers.get(id).add(data);
         }
     }
 
@@ -158,7 +158,6 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
     /** The thread that runs the socket server. */
     private class ServerThread extends Thread {
 
-        private final TypeSerializer<IN> serializer;
         private final ServerSocket serverSocket;
 
         private boolean running;
@@ -168,7 +167,6 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
         private DataOutputViewStreamWrapper outStream;
 
         private ServerThread(TypeSerializer<IN> serializer) throws Exception {
-            this.serializer = serializer.duplicate();
             this.serverSocket = new ServerSocket(0, 0, getBindAddress());
             this.running = true;
             LOG.info("init server thread : " + serverSocket);
@@ -179,7 +177,7 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
             LOG.info("server thread : " + serverSocket + " running. " + " running : " + running);
             while (running) {
                 try {
-                    CommonCollectCoordinationRequest request = null;
+                    TableCollectCoordinationRequest request;
                     if (connection == null) {
                         // waiting for coordinator to connect
                         connection = NetUtils.acceptWithoutTimeout(serverSocket);
@@ -189,41 +187,23 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
                                 new DataOutputViewStreamWrapper(this.connection.getOutputStream());
                         LOG.info("Coordinator connection received");
                     }
-                    request = new CommonCollectCoordinationRequest(inStream);
+                    request = new TableCollectCoordinationRequest(inStream);
                     LOG.info("server thread : " + serverSocket + "receive : " + request);
-                    //                    CommonCollectCoordinationRequest request =
-                    //                            new CommonCollectCoordinationRequest(inStream);
 
-                    //                    if (request.isOpen()) {
-                    //                        isNeedToOutput = true;
-                    //                    } else {
-                    //                        isNeedToOutput = false;
-                    //                        buffer.clear();
-                    //                        currentSize = 0;
-                    //                        continue;
-                    //                    }
+                    List<byte[]> nextBatch = new LinkedList<>();
 
-                    //                    if (currentSize < batchSize) {
-                    //                        continue;
-                    //                    }
-                    // valid request, sending out results
-                    //                    long size = request.getBatchSize();
-
-                    List<byte[]> nextBatch = new ArrayList<>();
-
-                    synchronized (buffer) {
-                        //                        long min = Math.min(currentSize, size);
-                        //                        for (int i = 0; i < min; i++) {
-                        //                            nextBatch.add(buffer.getFirst());
-                        //                            buffer.removeFirst();
-                        //                        }
-                        nextBatch = new ArrayList<>(buffer);
-                        buffer.clear();
-                        //                        currentSize = currentSize - min;
-                        currentSize = 0;
+                    long id = request.getId();
+                    synchronized (buffers) {
+                        if (id == -1) {
+                            id = nextId++;
+                            collectible.startConsume(nextId++);
+                        } else if (buffers.containsKey(id)) {
+                            nextBatch = new ArrayList<>(buffers.get(request.getId()));
+                            buffers.get(request.getId()).clear();
+                        }
                     }
 
-                    sendBackResults(nextBatch);
+                    sendBackResults(nextBatch, id);
                 } catch (Exception e) {
                     // Exception occurs, just close current connection
                     // client will come with the same offset if it needs the same batch of results
@@ -256,16 +236,6 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
         }
 
         private InetAddress getBindAddress() {
-            //            RuntimeContext context = getRuntimeContext();
-            //            Preconditions.checkState(
-            //                    context instanceof StreamingRuntimeContext,
-            //                    "CollectSinkFunction can only be used in StreamTask");
-            //            StreamingRuntimeContext streamingContext = (StreamingRuntimeContext)
-            // context;
-            //            String taskManagerAddress =
-            //
-            // streamingContext.getTaskManagerRuntimeInfo().getTaskManagerExternalAddress();
-            //            return new InetSocketAddress(taskManagerAddress, 0).getAddress();
             RuntimeContext context = getRuntimeContext();
             Preconditions.checkState(
                     context instanceof StreamingRuntimeContext,
@@ -284,12 +254,13 @@ public class CommonCollectSinkFunction<IN> extends RichSinkFunction<IN>
             return null;
         }
 
-        private void sendBackResults(List<byte[]> serializedResults) throws IOException {
+        private void sendBackResults(List<byte[]> serializedResults, long id) throws IOException {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Sending back " + serializedResults.size() + " results");
             }
-            CommonCollectCoordinationResponse response =
-                    new CommonCollectCoordinationResponse(
+            TableCollectCoordinationResponse response =
+                    new TableCollectCoordinationResponse(
+                            id,
                             running,
                             batchSize,
                             operatorId,

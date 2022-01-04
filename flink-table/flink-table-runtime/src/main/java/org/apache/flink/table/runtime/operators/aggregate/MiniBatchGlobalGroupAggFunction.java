@@ -230,6 +230,17 @@ public class MiniBatchGlobalGroupAggFunction
         }
     }
 
+    public RowData getCurrentValue(RowData key) throws Exception {
+        RowData acc = accState.value();
+        if (acc != null) {
+            globalAgg.setAccumulators(acc);
+            resultRow.replace(key, globalAgg.getValue());
+            return resultRow;
+        } else {
+            return null;
+        }
+    }
+
     @Override
     public void close() throws Exception {
         if (localAgg != null) {

@@ -214,4 +214,15 @@ public class GroupAggFunction extends KeyedProcessFunction<RowData, RowData, Row
             function.close();
         }
     }
+
+    public RowData getCurrentValue(RowData key) throws Exception {
+        RowData acc = accState.value();
+        if (acc != null) {
+            function.setAccumulators(acc);
+            resultRow.replace(key, function.getValue());
+            return resultRow;
+        } else {
+            return null;
+        }
+    }
 }

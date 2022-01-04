@@ -16,93 +16,85 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
-import org.apache.flink.api.common.functions.Function;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.jobgraph.OperatorID;
 import org.apache.flink.runtime.operators.coordination.OperatorCoordinator;
 import org.apache.flink.runtime.operators.coordination.OperatorEventDispatcher;
-import org.apache.flink.streaming.api.operators.AbstractStreamOperator;
-import org.apache.flink.streaming.api.operators.AbstractUdfStreamOperator;
+import org.apache.flink.streaming.api.operators.AbstractStreamOperatorFactory;
+import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.CoordinatedOperatorFactory;
-import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
-import org.apache.flink.streaming.api.operators.UdfStreamOperatorFactory;
 
 import java.time.Duration;
 
 /**
- * The Factory for operator that implements {@link CommonCollectible}.
+ * The Factory for operator that implements {@link Collectible}.
  *
  * @param <OUT>
  */
-public class CommonCollectOperatorFactory<OUT> extends SimpleOperatorFactory<OUT>
-        implements CoordinatedOperatorFactory<OUT>, UdfStreamOperatorFactory<OUT> {
+public class TableCollectOperatorFactory<OUT> extends AbstractStreamOperatorFactory<OUT>
+        implements CoordinatedOperatorFactory<OUT> {
 
     private static final long serialVersionUID = 1L;
 
-    private final AbstractStreamOperator operator;
+    private final AbstractUdfStreamOperatorWithCollector<OUT, ?> operator;
 
     private final int socketTimeoutMillis;
 
-    public CommonCollectOperatorFactory(
+    public TableCollectOperatorFactory(
             TypeSerializer<OUT> serializer,
             Duration socketTimeout,
-            AbstractStreamOperator<OUT> operator) {
-        super(operator);
-        assert getOperator() instanceof CommonCollectible;
-        this.operator = (AbstractStreamOperator<OUT>) getOperator();
-        ((CommonCollectible<OUT>) operator).setSerializer(serializer);
+            AbstractUdfStreamOperatorWithCollector<OUT, ?> operator) {
+        this.operator = operator;
+        ((Collectible<OUT>) operator).setSerializer(serializer);
         this.socketTimeoutMillis = (int) socketTimeout.toMillis();
     }
 
-    public CommonCollectOperatorFactory(
-            TypeSerializer serializer, AbstractStreamOperator<OUT> operator) {
+    public TableCollectOperatorFactory(
+            TypeSerializer serializer, AbstractUdfStreamOperatorWithCollector<OUT, ?> operator) {
         this(serializer, Duration.ofSeconds(999999), operator);
-    }
-
-    @Override
-    public Function getUserFunction() {
-        if (operator instanceof AbstractUdfStreamOperator) {
-            return ((AbstractUdfStreamOperator) operator).getUserFunction();
-        }
-        return null;
-    }
-
-    @Override
-    public String getUserFunctionClassName() {
-        if (operator instanceof AbstractUdfStreamOperator) {
-            return ((AbstractUdfStreamOperator) operator).getUserFunction().getClass().getName();
-        }
-
-        return null;
     }
 
     @Override
     public OperatorCoordinator.Provider getCoordinatorProvider(
             String operatorName, OperatorID operatorID) {
-        return new CommonCollectSinkOperatorCoordinator.Provider(operatorID, socketTimeoutMillis);
+        return new TableCollectSinkOperatorCoordinator.Provider(operatorID, socketTimeoutMillis);
     }
 
     @Override
     public <T extends StreamOperator<OUT>> T createStreamOperator(
             StreamOperatorParameters<OUT> parameters) {
         final OperatorID operatorId = parameters.getStreamConfig().getOperatorID();
-        final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
 
-        ((CommonCollectible<Object>) operator).buildCollectFunction(operatorId.toString());
-        ((CommonCollectible<Object>) operator)
-                .setOperatorEventGateway(eventDispatcher.getOperatorEventGateway(operatorId));
+        operator.buildCollectFunction(operatorId.toString(), getMailboxExecutor());
         operator.setProcessingTimeService(processingTimeService);
         operator.setup(
                 parameters.getContainingTask(),
                 parameters.getStreamConfig(),
                 parameters.getOutput());
 
+        final OperatorEventDispatcher eventDispatcher = parameters.getOperatorEventDispatcher();
+        operator.setOperatorEventGateway(eventDispatcher.getOperatorEventGateway(operatorId));
         eventDispatcher.registerEventHandler(operatorId, operator);
 
         return (T) operator;
+    }
+
+    @Override
+    public void setChainingStrategy(ChainingStrategy strategy) {
+        operator.setChainingStrategy(strategy);
+    }
+
+    @Override
+    public ChainingStrategy getChainingStrategy() {
+        return operator.getChainingStrategy();
+    }
+
+    @Override
+    public Class<? extends StreamOperator> getStreamOperatorClass(ClassLoader classLoader) {
+        return operator.getClass();
     }
 }

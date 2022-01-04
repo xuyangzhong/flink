@@ -19,8 +19,10 @@
 package org.apache.flink.table.planner.plan.nodes.exec;
 
 import org.apache.flink.annotation.VisibleForTesting;
+import org.apache.flink.api.dag.Pipeline;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.streaming.api.graph.StreamGraph;
 import org.apache.flink.table.api.Schema;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.config.OptimizerConfigOptions;
@@ -155,7 +157,7 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         return transformation;
     }
 
-    public void registerExecNode(String jobId, PlannerBase planner) {
+    public void registerExecNode(String jobId, PlannerBase planner, Pipeline streamGraph) {
         if (!supportConsume()) {
             return;
         }
@@ -172,8 +174,16 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         options.put("digest", digest);
         options.put("job_id", jobId);
         options.put("op_id", operatorId);
-        CatalogOpTable opTable = new CatalogOpTable(schema, getId(), options);
+        int parallelism =
+                ((StreamGraph) streamGraph)
+                        .getStreamNodes().stream()
+                                .filter(node -> node.getTransformationUID().equals(operatorId))
+                                .findFirst()
+                                .get()
+                                .getParallelism();
+        options.put("parallelism", String.valueOf(parallelism));
 
+        CatalogOpTable opTable = new CatalogOpTable(schema, getId(), options, getDescription());
         ObjectIdentifier identifier =
                 ObjectIdentifier.of(
                         planner.catalogManager().getCurrentCatalog(), jobId, operatorId);

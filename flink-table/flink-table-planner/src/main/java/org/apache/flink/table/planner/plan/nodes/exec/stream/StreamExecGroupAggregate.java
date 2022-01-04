@@ -19,7 +19,6 @@
 package org.apache.flink.table.planner.plan.nodes.exec.stream;
 
 import org.apache.flink.api.dag.Transformation;
-import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.api.TableConfig;
@@ -41,6 +40,7 @@ import org.apache.flink.table.runtime.generated.GeneratedAggsHandleFunction;
 import org.apache.flink.table.runtime.generated.GeneratedRecordEqualiser;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.operators.aggregate.GroupAggFunction;
+import org.apache.flink.table.runtime.operators.aggregate.GroupAggregateOperator;
 import org.apache.flink.table.runtime.operators.aggregate.MiniBatchGroupAggFunction;
 import org.apache.flink.table.runtime.operators.bundle.KeyedMapBundleOperator;
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter;
@@ -215,7 +215,7 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
                             inputCountIndex,
                             generateUpdateBefore,
                             tableConfig.getIdleStateRetention().toMillis());
-            operator = new KeyedProcessOperator<>(aggFunction);
+            operator = new GroupAggregateOperator(aggFunction);
         }
 
         // partitioned aggregation
@@ -235,5 +235,10 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
         transform.setStateKeyType(selector.getProducedType());
 
         return transform;
+    }
+
+    @Override
+    public boolean supportConsume() {
+        return true;
     }
 }

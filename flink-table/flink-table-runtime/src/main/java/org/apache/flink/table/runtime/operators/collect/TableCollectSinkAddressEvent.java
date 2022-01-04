@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-package org.apache.flink.streaming.api.operators.commoncollect;
+package org.apache.flink.table.runtime.operators.collect;
 
 import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 
@@ -26,14 +26,14 @@ import java.net.InetSocketAddress;
  * An {@link OperatorEvent} that passes the operator id and socket server address in the sink to the
  * coordinator.
  */
-public class CommonCollectSinkAddressEvent implements OperatorEvent {
+public class TableCollectSinkAddressEvent implements OperatorEvent {
     private static final long serialVersionUID = 1L;
 
     private final String operatorId;
 
     private final InetSocketAddress address;
 
-    public CommonCollectSinkAddressEvent(String operatorId, InetSocketAddress address) {
+    public TableCollectSinkAddressEvent(String operatorId, InetSocketAddress address) {
         this.operatorId = operatorId;
         this.address = address;
     }

@@ -19,23 +19,14 @@ package org.apache.flink.streaming.api.operators;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.api.common.functions.MapFunction;
-import org.apache.flink.api.common.typeutils.TypeSerializer;
-import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectSinkFunction;
-import org.apache.flink.streaming.api.operators.commoncollect.CommonCollectible;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 
 /** A {@link StreamOperator} for executing {@link MapFunction MapFunctions}. */
 @Internal
 public class StreamMap<IN, OUT> extends AbstractUdfStreamOperator<OUT, MapFunction<IN, OUT>>
-        implements OneInputStreamOperator<IN, OUT>, CommonCollectible<OUT> {
+        implements OneInputStreamOperator<IN, OUT> {
 
     private static final long serialVersionUID = 1L;
-    //
-    private CommonCollectSinkFunction<OUT> collectFunction;
-    //
-    private boolean enableCollection = true;
-    //
-    private TypeSerializer<OUT> serializer;
 
     public StreamMap(MapFunction<IN, OUT> mapper) {
         super(mapper);
@@ -44,75 +35,6 @@ public class StreamMap<IN, OUT> extends AbstractUdfStreamOperator<OUT, MapFuncti
 
     @Override
     public void processElement(StreamRecord<IN> element) throws Exception {
-        OUT newRecord = userFunction.map(element.getValue());
-        output.collect(element.replace(newRecord));
-        //        if (enableCollection) {
-        //            collectFunction.invoke(newRecord);
-        //        }
+        output.collect(element.replace(userFunction.map(element.getValue())));
     }
-
-    //    @Override
-    //    public void setSerializer(TypeSerializer<OUT> serializer) {
-    //        this.serializer = serializer;
-    //    }
-    //
-    //    @Override
-    //    public void setOperatorEventGateway(OperatorEventGateway operatorEventGateway) {
-    //        collectFunction.setOperatorEventGateway(operatorEventGateway);
-    //    }
-    //
-    //    @Override
-    //    public void handleOperatorEvent(OperatorEvent evt) {
-    //        // do nothing
-    //    }
-    //
-    //    @Override
-    //    public void buildCollectFunction(String operatorId) {
-    //        this.collectFunction = new CommonCollectSinkFunction<>(serializer, 1, operatorId);
-    //    }
-    //
-    //    @Override
-    //    public void open() throws Exception {
-    //        super.open();
-    //        FunctionUtils.openFunction(collectFunction, new Configuration());
-    //    }
-    //
-    //    @Override
-    //    public void setup(
-    //            StreamTask<?, ?> containingTask,
-    //            StreamConfig config,
-    //            Output<StreamRecord<OUT>> output) {
-    //        super.setup(containingTask, config, output);
-    //
-    //        final Environment environment = containingTask.getEnvironment();
-    //        InternalOperatorMetricGroup operatorMetricGroup =
-    //                environment
-    //                        .getMetricGroup()
-    //                        .getOrAddOperator(config.getOperatorID(), config.getOperatorName());
-    //        this.output =
-    //                new CommonCollectOutput<>(
-    //                        output,
-    //                        operatorMetricGroup.getIOMetricGroup().getNumRecordsOutCounter(),
-    //                        collectFunction);
-    //        FunctionUtils.setFunctionRuntimeContext(collectFunction, getRuntimeContext());
-    //    }
-    //
-    //    @Override
-    //    public void snapshotState(StateSnapshotContext context) throws Exception {
-    //        super.snapshotState(context);
-    //        StreamingFunctionUtils.snapshotFunctionState(
-    //                context, getOperatorStateBackend(), collectFunction);
-    //    }
-    //
-    //    @Override
-    //    public void initializeState(StateInitializationContext context) throws Exception {
-    //        super.initializeState(context);
-    //        StreamingFunctionUtils.restoreFunctionState(context, collectFunction);
-    //    }
-    //
-    //    @Override
-    //    public void finish() throws Exception {
-    //        super.finish();
-    //        collectFunction.finish();
-    //    }
 }
