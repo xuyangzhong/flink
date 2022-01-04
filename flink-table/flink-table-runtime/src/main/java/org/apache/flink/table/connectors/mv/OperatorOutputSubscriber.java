@@ -38,7 +38,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
-public class OperatorIncrementSubscriber
+/** Operator. */
+public class OperatorOutputSubscriber
         implements SourceFunction<RowData>, ResultTypeQueryable<RowData> {
 
     private final String endpoint;
@@ -48,7 +49,7 @@ public class OperatorIncrementSubscriber
     private final RowType rowType;
     private final HashMap<Integer, Long> ids = new HashMap<>();
 
-    public OperatorIncrementSubscriber(
+    public OperatorOutputSubscriber(
             String endpoint, String jobId, String operatorId, int parallelism, RowType rowType) {
         this.endpoint = endpoint;
         this.jobId = jobId;

@@ -27,7 +27,7 @@ import org.apache.flink.table.runtime.operators.collect.TableCollectSinkFunction
 
 import java.util.stream.Stream;
 
-/** GroupAggregateOperator */
+/** GroupAggregateOperator. */
 public class GroupAggregateOperator
         extends AbstractKeyedProcessOperatorWithCollector<RowData, RowData, RowData>
         implements Scannable<RowData> {

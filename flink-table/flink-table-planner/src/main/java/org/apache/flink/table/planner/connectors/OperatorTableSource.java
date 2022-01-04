@@ -23,7 +23,7 @@ import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
-import org.apache.flink.table.connectors.mv.OperatorIncrementSubscriber;
+import org.apache.flink.table.connectors.mv.OperatorOutputSubscriber;
 import org.apache.flink.table.types.logical.RowType;
 
 public class OperatorTableSource implements ScanTableSource {
@@ -61,7 +61,7 @@ public class OperatorTableSource implements ScanTableSource {
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext runtimeProviderContext) {
         return SourceFunctionProvider.of(
-                new OperatorIncrementSubscriber(endpoint, jobId, operatorId, parallelism, rowType),
+                new OperatorOutputSubscriber(endpoint, jobId, operatorId, parallelism, rowType),
                 false);
     }
 }
