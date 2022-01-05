@@ -84,14 +84,14 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
     private long nextId = 0;
 
     public TableCollectSinkFunction(
-            TypeSerializer<IN> serializer, long batchSize, String operatorId) {
+            Collectible<IN> collectible,
+            TypeSerializer<IN> serializer,
+            long batchSize,
+            String operatorId) {
+        this.collectible = collectible;
         this.serializer = serializer;
         this.batchSize = batchSize;
         this.operatorId = operatorId;
-    }
-
-    private void initBuffer(long id) {
-        buffers.put(id, new LinkedList<>());
     }
 
     @Override
@@ -199,7 +199,7 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
                     synchronized (buffers) {
                         if (id == -1) {
                             id = nextId++;
-                            collectible.startConsume(nextId++);
+                            collectible.startConsume(id);
                         } else if (buffers.containsKey(id)) {
                             nextBatch = new ArrayList<>(buffers.get(request.getId()));
                             buffers.get(request.getId()).clear();

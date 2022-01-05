@@ -36,16 +36,11 @@ public class TableCollectOutput<OUT> implements Output<StreamRecord<OUT>> {
 
     private final Output<StreamRecord<OUT>> output;
     private final TableCollectSinkFunction<OUT> collectFunc;
-    private boolean collectEnabled;
 
     public TableCollectOutput(
             Output<StreamRecord<OUT>> output, TableCollectSinkFunction<OUT> collectFunc) {
         this.output = output;
         this.collectFunc = collectFunc;
-    }
-
-    public void setCollectEnabled(boolean isEnabled) {
-        collectEnabled = isEnabled;
     }
 
     @Override
@@ -66,9 +61,6 @@ public class TableCollectOutput<OUT> implements Output<StreamRecord<OUT>> {
     @Override
     public void collect(StreamRecord<OUT> record) {
         output.collect(record);
-        if (collectFunc == null || !collectEnabled) {
-            return;
-        }
         try {
             collectFunc.invoke(record.getValue());
         } catch (Exception e) {

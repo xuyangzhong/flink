@@ -117,6 +117,7 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
     }
 
     public void serialize(DataOutputView outView) throws IOException {
+        idSerializer.serialize(id, outView);
         isOpenSerializer.serialize(isOpen, outView);
         batchSizeSerializer.serialize(batchSize, outView);
         operatorIdSerializer.serialize(operatorId, outView);
@@ -126,7 +127,9 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
 
     @Override
     public String toString() {
-        return "CommonCollectCoordinationResponse{"
+        return "CollectCoordinationResponse{"
+                + "id="
+                + id
                 + "isOpen="
                 + isOpen
                 + ", batchSize="

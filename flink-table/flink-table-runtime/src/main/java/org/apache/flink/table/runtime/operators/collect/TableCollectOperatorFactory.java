@@ -27,6 +27,7 @@ import org.apache.flink.streaming.api.operators.ChainingStrategy;
 import org.apache.flink.streaming.api.operators.CoordinatedOperatorFactory;
 import org.apache.flink.streaming.api.operators.StreamOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorParameters;
+import org.apache.flink.streaming.api.operators.YieldingOperatorFactory;
 
 import java.time.Duration;
 
@@ -36,7 +37,7 @@ import java.time.Duration;
  * @param <OUT>
  */
 public class TableCollectOperatorFactory<OUT> extends AbstractStreamOperatorFactory<OUT>
-        implements CoordinatedOperatorFactory<OUT> {
+        implements YieldingOperatorFactory<OUT>, CoordinatedOperatorFactory<OUT> {
 
     private static final long serialVersionUID = 1L;
 

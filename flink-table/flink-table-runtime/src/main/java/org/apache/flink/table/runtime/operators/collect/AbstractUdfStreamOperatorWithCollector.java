@@ -35,7 +35,6 @@ import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.util.functions.StreamingFunctionUtils;
-import org.apache.flink.util.function.RunnableWithException;
 
 /**
  * This is used as the base class for operators that have a user-defined function. This class
@@ -66,7 +65,7 @@ public abstract class AbstractUdfStreamOperatorWithCollector<OUT, F extends Func
 
     @Override
     public void buildCollectFunction(String operatorId, MailboxExecutor executor) {
-        this.collectFunction = new TableCollectSinkFunction<>(serializer, 1, operatorId);
+        this.collectFunction = new TableCollectSinkFunction<>(this, serializer, 1, operatorId);
         this.executor = executor;
     }
 
@@ -77,13 +76,10 @@ public abstract class AbstractUdfStreamOperatorWithCollector<OUT, F extends Func
 
     public void startConsume(long id) {
         executor.submit(
-                new RunnableWithException() {
-                    @Override
-                    public void run() throws Exception {
-                        if (AbstractUdfStreamOperatorWithCollector.this instanceof Scannable) {
-                            ((Scannable) AbstractUdfStreamOperatorWithCollector.this)
-                                    .scan(collectFunction, id);
-                        }
+                () -> {
+                    if (AbstractUdfStreamOperatorWithCollector.this instanceof Scannable) {
+                        ((Scannable) AbstractUdfStreamOperatorWithCollector.this)
+                                .scan(collectFunction, id);
                     }
                 },
                 "subscribe");

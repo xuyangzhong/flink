@@ -177,6 +177,7 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         int parallelism =
                 ((StreamGraph) streamGraph)
                         .getStreamNodes().stream()
+                                .filter(node -> node.getTransformationUID() != null)
                                 .filter(node -> node.getTransformationUID().equals(operatorId))
                                 .findFirst()
                                 .get()

@@ -102,7 +102,9 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
     }
 
     public void serialize(DataOutputView outView) throws IOException {
+        idSerializer.serialize(id, outView);
         isOpenSerializer.serialize(isOpen, outView);
+        isBatchSerializer.serialize(isBounded, outView);
         batchSizeSerializer.serialize(batchSize, outView);
         operatorIdSerializer.serialize(operatorId, outView);
         subtaskIdSerializer.serialize(subtaskId, outView);
@@ -110,7 +112,9 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
 
     @Override
     public String toString() {
-        return "CommonCollectCoordinationRequest{"
+        return "CollectCoordinationRequest{"
+                + "id="
+                + id
                 + "isOpen="
                 + isOpen
                 + ", batchSize="

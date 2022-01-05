@@ -25,6 +25,7 @@ import org.apache.flink.table.runtime.operators.collect.AbstractKeyedProcessOper
 import org.apache.flink.table.runtime.operators.collect.Scannable;
 import org.apache.flink.table.runtime.operators.collect.TableCollectSinkFunction;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Stream;
 
 /** GroupAggregateOperator. */
@@ -40,20 +41,26 @@ public class GroupAggregateOperator
 
     @Override
     public void scan(TableCollectSinkFunction<RowData> sink, long id) {
+        LOG.info("start scan for subscriber " + id);
         Stream<Object> keyIterator =
                 getKeyedStateBackend().getKeys("accState", VoidNamespace.INSTANCE);
+        AtomicInteger count = new AtomicInteger(0);
         keyIterator.forEach(
                 key -> {
                     setCurrentKey(key);
                     try {
-                        sink.invoke(
+                        RowData value =
                                 ((GroupAggFunction) getUserFunction())
-                                        .getCurrentValue((RowData) key),
-                                id);
+                                        .getCurrentValue((RowData) key);
+                        if (value != null) {
+                            sink.invoke(value, id);
+                            count.getAndIncrement();
+                        }
                     } catch (Exception e) {
                         throw new RuntimeException(e);
                     }
                 });
+        LOG.info("end scan for subscriber " + id + " row: " + count.get());
     }
 
     @Override

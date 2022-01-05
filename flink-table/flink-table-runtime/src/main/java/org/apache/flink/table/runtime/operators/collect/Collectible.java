@@ -27,16 +27,6 @@ import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
 public interface Collectible<OUT> extends OperatorEventHandler {
     int BATCH_SIZE = 1;
 
-    default TableCollectSinkFunction<OUT> getCollectFunction(
-            TypeSerializer<OUT> serializer, long batchSize, String operatorId) {
-        return new TableCollectSinkFunction<>(serializer, batchSize, operatorId);
-    }
-
-    default TableCollectSinkFunction<OUT> getCollectFunction(
-            TypeSerializer<OUT> serializer, String operatorId) {
-        return new TableCollectSinkFunction<>(serializer, BATCH_SIZE, operatorId);
-    }
-
     void setOperatorEventGateway(OperatorEventGateway operatorEventGateway);
 
     void buildCollectFunction(String operatorId, MailboxExecutor executor);
