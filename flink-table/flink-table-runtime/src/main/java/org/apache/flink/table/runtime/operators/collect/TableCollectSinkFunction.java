@@ -46,9 +46,11 @@ import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Similar with {@link CollectSinkFunction}, the difference is following:
@@ -76,6 +78,8 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
     private transient OperatorEventGateway eventGateway;
 
     private final transient Map<Long, LinkedList<byte[]>> buffers = new HashMap<>();
+    private final transient Set<Long> finishedId = new HashSet<>();
+    private final transient Set<Long> boundedId = new HashSet<>();
 
     private transient ServerThread serverThread;
 
@@ -104,7 +108,7 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
 
     @Override
     public void open(Configuration parameters) throws Exception {
-        serverThread = new ServerThread(serializer);
+        serverThread = new ServerThread();
         serverThread.start();
 
         // sending socket server address to coordinator
@@ -158,6 +162,12 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
         this.eventGateway = eventGateway;
     }
 
+    public void markScanFinished(long id) {
+        if (boundedId.contains(id)) {
+            finishedId.add(id);
+        }
+    }
+
     /** The thread that runs the socket server. */
     private class ServerThread extends Thread {
 
@@ -169,7 +179,7 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
         private DataInputViewStreamWrapper inStream;
         private DataOutputViewStreamWrapper outStream;
 
-        private ServerThread(TypeSerializer<IN> serializer) throws Exception {
+        private ServerThread() throws Exception {
             this.serverSocket = new ServerSocket(0, 0, getBindAddress());
             this.running = true;
             LOG.info("init server thread : " + serverSocket);
@@ -199,14 +209,27 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
                     synchronized (buffers) {
                         if (id == -1) {
                             id = nextId++;
+                            if (request.isBounded()) {
+                                boundedId.add(id);
+                            }
                             collectible.startConsume(id);
                         } else if (buffers.containsKey(id)) {
-                            nextBatch = new ArrayList<>(buffers.get(request.getId()));
-                            buffers.get(request.getId()).clear();
+                            if (request.isCanceled()) {
+                                // cancel
+                                finishedId.add(id);
+                                buffers.remove(id);
+                            } else {
+                                nextBatch = new ArrayList<>(buffers.get(request.getId()));
+                                if (finishedId.contains(id)) {
+                                    buffers.remove(id);
+                                } else {
+                                    buffers.get(id).clear();
+                                }
+                            }
                         }
                     }
 
-                    sendBackResults(nextBatch, id);
+                    sendBackResults(nextBatch, id, finishedId.contains(id));
                 } catch (Exception e) {
                     // Exception occurs, just close current connection
                     // client will come with the same offset if it needs the same batch of results
@@ -257,14 +280,15 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
             return null;
         }
 
-        private void sendBackResults(List<byte[]> serializedResults, long id) throws IOException {
+        private void sendBackResults(List<byte[]> serializedResults, long id, boolean finished)
+                throws IOException {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Sending back " + serializedResults.size() + " results");
             }
             TableCollectCoordinationResponse response =
                     new TableCollectCoordinationResponse(
                             id,
-                            running,
+                            finished,
                             batchSize,
                             operatorId,
                             getRuntimeContext().getIndexOfThisSubtask(),

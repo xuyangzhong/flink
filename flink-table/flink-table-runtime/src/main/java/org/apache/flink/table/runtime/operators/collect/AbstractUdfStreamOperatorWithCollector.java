@@ -81,6 +81,7 @@ public abstract class AbstractUdfStreamOperatorWithCollector<OUT, F extends Func
                         ((Scannable) AbstractUdfStreamOperatorWithCollector.this)
                                 .scan(collectFunction, id);
                     }
+                    collectFunction.markScanFinished(id);
                 },
                 "subscribe");
     }

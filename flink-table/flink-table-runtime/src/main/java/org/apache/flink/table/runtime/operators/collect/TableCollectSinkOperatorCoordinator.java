@@ -200,7 +200,7 @@ public class TableCollectSinkOperatorCoordinator
         future.complete(
                 new TableCollectCoordinationResponse(
                         request.getId(),
-                        request.isOpen(),
+                        true,
                         DEFAULT_BATCH_SIZE,
                         operatorId,
                         subtaskId,

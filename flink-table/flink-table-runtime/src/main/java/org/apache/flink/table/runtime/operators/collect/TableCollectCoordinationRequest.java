@@ -40,14 +40,14 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
     private static final long serialVersionUID = 1L;
 
     private static final TypeSerializer<Long> idSerializer = LongSerializer.INSTANCE;
-    private static final TypeSerializer<Boolean> isOpenSerializer = BooleanSerializer.INSTANCE;
-    private static final TypeSerializer<Boolean> isBatchSerializer = BooleanSerializer.INSTANCE;
+    private static final TypeSerializer<Boolean> isCanceledSerializer = BooleanSerializer.INSTANCE;
+    private static final TypeSerializer<Boolean> isBoundedSerializer = BooleanSerializer.INSTANCE;
     private static final TypeSerializer<Long> batchSizeSerializer = LongSerializer.INSTANCE;
     private static final TypeSerializer<String> operatorIdSerializer = StringSerializer.INSTANCE;
     private static final TypeSerializer<Integer> subtaskIdSerializer = IntSerializer.INSTANCE;
 
     private final long id;
-    private final boolean isOpen;
+    private final boolean isCanceled;
     private final boolean isBounded;
     private final long batchSize;
     private final String operatorId;
@@ -55,13 +55,13 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
 
     public TableCollectCoordinationRequest(
             long id,
-            boolean isOpen,
+            boolean isCanceled,
             boolean isBounded,
             long batchSize,
             String operatorId,
             int subtaskId) {
         this.id = id;
-        this.isOpen = isOpen;
+        this.isCanceled = isCanceled;
         this.batchSize = batchSize;
         this.operatorId = operatorId;
         this.subtaskId = subtaskId;
@@ -70,8 +70,8 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
 
     public TableCollectCoordinationRequest(DataInputView inView) throws IOException {
         this.id = idSerializer.deserialize(inView);
-        this.isOpen = isOpenSerializer.deserialize(inView);
-        this.isBounded = isBatchSerializer.deserialize(inView);
+        this.isCanceled = isCanceledSerializer.deserialize(inView);
+        this.isBounded = isBoundedSerializer.deserialize(inView);
         this.batchSize = batchSizeSerializer.deserialize(inView);
         this.operatorId = operatorIdSerializer.deserialize(inView);
         this.subtaskId = subtaskIdSerializer.deserialize(inView);
@@ -85,8 +85,8 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
         return isBounded;
     }
 
-    public boolean isOpen() {
-        return isOpen;
+    public boolean isCanceled() {
+        return isCanceled;
     }
 
     public long getBatchSize() {
@@ -103,8 +103,8 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
 
     public void serialize(DataOutputView outView) throws IOException {
         idSerializer.serialize(id, outView);
-        isOpenSerializer.serialize(isOpen, outView);
-        isBatchSerializer.serialize(isBounded, outView);
+        isCanceledSerializer.serialize(isCanceled, outView);
+        isBoundedSerializer.serialize(isBounded, outView);
         batchSizeSerializer.serialize(batchSize, outView);
         operatorIdSerializer.serialize(operatorId, outView);
         subtaskIdSerializer.serialize(subtaskId, outView);
@@ -115,8 +115,10 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
         return "CollectCoordinationRequest{"
                 + "id="
                 + id
-                + "isOpen="
-                + isOpen
+                + "isCanceled="
+                + isCanceled
+                + "isBounded="
+                + isBounded
                 + ", batchSize="
                 + batchSize
                 + ", operatorId='"

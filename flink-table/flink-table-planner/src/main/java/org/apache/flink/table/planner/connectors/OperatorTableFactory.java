@@ -50,12 +50,14 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
         String jobId = properties.get("job_id");
         int parallelism = Integer.valueOf(properties.getOrDefault("parallelism", "1"));
         RowType rowType = (RowType) context.getPhysicalRowDataType().getLogicalType();
+        boolean isBounded = Boolean.valueOf(properties.getOrDefault("is_bounded", "false"));
         return new OperatorTableSource(
                 endpoint,
                 jobId,
                 fromUID(context.getObjectIdentifier().getObjectName()),
                 parallelism,
-                rowType);
+                rowType,
+                isBounded);
     }
 
     private static String fromUID(String headOpUid) {

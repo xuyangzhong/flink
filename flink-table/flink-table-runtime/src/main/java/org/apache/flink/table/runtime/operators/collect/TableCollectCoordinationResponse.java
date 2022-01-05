@@ -47,7 +47,7 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
     private static final long serialVersionUID = 1L;
 
     private static final TypeSerializer<Long> idSerializer = LongSerializer.INSTANCE;
-    private static final TypeSerializer<Boolean> isOpenSerializer = BooleanSerializer.INSTANCE;
+    private static final TypeSerializer<Boolean> isFinishedSerializer = BooleanSerializer.INSTANCE;
     private static final TypeSerializer<Long> batchSizeSerializer = LongSerializer.INSTANCE;
     private static final TypeSerializer<String> operatorIdSerializer = StringSerializer.INSTANCE;
     private static final TypeSerializer<Integer> subtaskIdSerializer = IntSerializer.INSTANCE;
@@ -56,7 +56,7 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
             new ListSerializer<>(BytePrimitiveArraySerializer.INSTANCE);
 
     private final long id;
-    private final boolean isOpen;
+    private final boolean isFinished;
     private final long batchSize;
     private final String operatorId;
     private final int subtaskId;
@@ -64,13 +64,13 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
 
     public TableCollectCoordinationResponse(
             long id,
-            boolean isOpen,
+            boolean isFinished,
             long batchSize,
             String operatorId,
             int subtaskId,
             List<byte[]> serializedResults) {
         this.id = id;
-        this.isOpen = isOpen;
+        this.isFinished = isFinished;
         this.batchSize = batchSize;
         this.operatorId = operatorId;
         this.subtaskId = subtaskId;
@@ -79,7 +79,7 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
 
     public TableCollectCoordinationResponse(DataInputView inView) throws IOException {
         this.id = idSerializer.deserialize(inView);
-        this.isOpen = isOpenSerializer.deserialize(inView);
+        this.isFinished = isFinishedSerializer.deserialize(inView);
         this.batchSize = batchSizeSerializer.deserialize(inView);
         this.operatorId = operatorIdSerializer.deserialize(inView);
         this.subtaskId = subtaskIdSerializer.deserialize(inView);
@@ -90,8 +90,8 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
         return id;
     }
 
-    public boolean isOpen() {
-        return isOpen;
+    public boolean isFinished() {
+        return isFinished;
     }
 
     public long getBatchSize() {
@@ -118,7 +118,7 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
 
     public void serialize(DataOutputView outView) throws IOException {
         idSerializer.serialize(id, outView);
-        isOpenSerializer.serialize(isOpen, outView);
+        isFinishedSerializer.serialize(isFinished, outView);
         batchSizeSerializer.serialize(batchSize, outView);
         operatorIdSerializer.serialize(operatorId, outView);
         subtaskIdSerializer.serialize(subtaskId, outView);
@@ -130,8 +130,8 @@ public class TableCollectCoordinationResponse implements CoordinationResponse {
         return "CollectCoordinationResponse{"
                 + "id="
                 + id
-                + "isOpen="
-                + isOpen
+                + "isFinished="
+                + isFinished
                 + ", batchSize="
                 + batchSize
                 + ", operatorId='"

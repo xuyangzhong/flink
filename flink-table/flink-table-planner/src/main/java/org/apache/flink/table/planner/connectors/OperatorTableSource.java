@@ -34,19 +34,27 @@ public class OperatorTableSource implements ScanTableSource {
     private final String operatorId;
     private final RowType rowType;
     private final int parallelism;
+    private final boolean isBounded;
 
     public OperatorTableSource(
-            String endpoint, String jobId, String operatorId, int parallelism, RowType rowType) {
+            String endpoint,
+            String jobId,
+            String operatorId,
+            int parallelism,
+            RowType rowType,
+            boolean isBounded) {
         this.endpoint = endpoint;
         this.jobId = jobId;
         this.rowType = rowType;
         this.operatorId = operatorId;
         this.parallelism = parallelism;
+        this.isBounded = isBounded;
     }
 
     @Override
     public DynamicTableSource copy() {
-        return new OperatorTableSource(endpoint, jobId, operatorId, parallelism, rowType);
+        return new OperatorTableSource(
+                endpoint, jobId, operatorId, parallelism, rowType, isBounded);
     }
 
     @Override
@@ -56,13 +64,17 @@ public class OperatorTableSource implements ScanTableSource {
 
     @Override
     public ChangelogMode getChangelogMode() {
+        if (isBounded) {
+            return ChangelogMode.insertOnly();
+        }
         return ChangelogMode.all();
     }
 
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext runtimeProviderContext) {
         return SourceFunctionProvider.of(
-                new OperatorOutputSubscriber(endpoint, jobId, operatorId, parallelism, rowType),
-                false);
+                new OperatorOutputSubscriber(
+                        endpoint, jobId, operatorId, parallelism, rowType, isBounded),
+                isBounded);
     }
 }

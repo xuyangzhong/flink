@@ -33,6 +33,9 @@ import org.apache.flink.table.runtime.operators.collect.TableCollectCoordination
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -41,21 +44,29 @@ import java.util.Set;
 /** Operator. */
 public class OperatorOutputSubscriber
         implements SourceFunction<RowData>, ResultTypeQueryable<RowData> {
+    protected static final Logger LOG = LoggerFactory.getLogger(OperatorOutputSubscriber.class);
 
     private final String endpoint;
     private final String jobId;
     private final String operatorId;
     private final int parallelism;
     private final RowType rowType;
+    private final boolean isBounded;
     private final HashMap<Integer, Long> ids = new HashMap<>();
 
     public OperatorOutputSubscriber(
-            String endpoint, String jobId, String operatorId, int parallelism, RowType rowType) {
+            String endpoint,
+            String jobId,
+            String operatorId,
+            int parallelism,
+            RowType rowType,
+            boolean isBounded) {
         this.endpoint = endpoint;
         this.jobId = jobId;
         this.operatorId = operatorId;
         this.parallelism = parallelism;
         this.rowType = rowType;
+        this.isBounded = isBounded;
     }
 
     @Override
@@ -68,6 +79,10 @@ public class OperatorOutputSubscriber
                 InternalTypeInfo.of(rowType).createSerializer(new ExecutionConfig());
         Set<Integer> finished = new HashSet<>();
         while (true) {
+            if (finished.size() == parallelism) {
+                // finish
+                break;
+            }
             for (int subtask = 0; subtask < parallelism; subtask++) {
                 if (finished.contains(subtask)) {
                     continue;
@@ -76,20 +91,21 @@ public class OperatorOutputSubscriber
                 TableCollectCoordinationRequest request =
                         new TableCollectCoordinationRequest(
                                 ids.getOrDefault(subtask, -1L),
-                                true,
                                 false,
+                                isBounded,
                                 1,
                                 opId.toString(),
                                 subtask);
                 TableCollectCoordinationResponse response =
                         (TableCollectCoordinationResponse)
                                 client.sendCoordinationRequest(jId, opId, request).get();
+                LOG.info("response from coordinator " + response);
                 ids.putIfAbsent(subtask, response.getId());
                 List<RowData> cdcLog = response.getResults(typeSerializer);
                 if (cdcLog != null) {
                     cdcLog.forEach(ctx::collect);
                 }
-                if (!response.isOpen()) {
+                if (response.isFinished()) {
                     finished.add(subtask);
                 }
             }
@@ -106,7 +122,7 @@ public class OperatorOutputSubscriber
             for (int subtask = 0; subtask < parallelism; subtask++) {
                 TableCollectCoordinationRequest request =
                         new TableCollectCoordinationRequest(
-                                ids.get(subtask), false, false, 1, opId.toString(), subtask);
+                                ids.get(subtask), true, isBounded, 1, opId.toString(), subtask);
                 client.sendCoordinationRequest(jId, opId, request).get();
             }
         } catch (Exception ignored) {
