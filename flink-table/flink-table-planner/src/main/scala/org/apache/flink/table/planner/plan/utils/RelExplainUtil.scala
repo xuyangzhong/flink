@@ -375,7 +375,7 @@ object RelExplainUtil {
     val propStrings = windowProperties.map(_.getProperty.toString)
     (groupingNames ++ aggStrings ++ propStrings).zip(outputFieldNames).map {
       case (f, o) if f == o => f
-      case (f, o) => s"$f AS $o"
+      case (f, o) => f
     }.mkString(", ")
   }
 
