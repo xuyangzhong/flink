@@ -22,6 +22,7 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.runtime.operators.coordination.OperatorEventGateway;
 import org.apache.flink.runtime.operators.coordination.OperatorEventHandler;
+import org.apache.flink.table.data.RowData;
 
 /** An interface for operators to enable to be collected outputs by client. */
 public interface Collectible<OUT> extends OperatorEventHandler {
@@ -34,4 +35,6 @@ public interface Collectible<OUT> extends OperatorEventHandler {
     void setSerializer(TypeSerializer<OUT> serializer);
 
     void startConsume(long subscribeID);
+
+    void startLookup(RowData key, long subscribeID);
 }

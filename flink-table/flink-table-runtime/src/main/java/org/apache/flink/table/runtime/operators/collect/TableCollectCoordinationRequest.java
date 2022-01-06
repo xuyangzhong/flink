@@ -17,6 +17,7 @@
 
 package org.apache.flink.table.runtime.operators.collect;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.api.common.typeutils.base.BooleanSerializer;
 import org.apache.flink.api.common.typeutils.base.IntSerializer;
@@ -25,6 +26,12 @@ import org.apache.flink.api.common.typeutils.base.StringSerializer;
 import org.apache.flink.core.memory.DataInputView;
 import org.apache.flink.core.memory.DataOutputView;
 import org.apache.flink.runtime.operators.coordination.CoordinationRequest;
+import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
+import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.utils.LogicalTypeParser;
+
+import javax.annotation.Nullable;
 
 import java.io.IOException;
 
@@ -44,7 +51,9 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
     private static final TypeSerializer<Boolean> isBoundedSerializer = BooleanSerializer.INSTANCE;
     private static final TypeSerializer<Long> batchSizeSerializer = LongSerializer.INSTANCE;
     private static final TypeSerializer<String> operatorIdSerializer = StringSerializer.INSTANCE;
+    private static final TypeSerializer<Boolean> hasKeySerializer = BooleanSerializer.INSTANCE;
     private static final TypeSerializer<Integer> subtaskIdSerializer = IntSerializer.INSTANCE;
+    private static final TypeSerializer<String> keyTypeSerializer = StringSerializer.INSTANCE;
 
     private final long id;
     private final boolean isCanceled;
@@ -52,6 +61,8 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
     private final long batchSize;
     private final String operatorId;
     private final int subtaskId;
+    private final @Nullable RowData key;
+    private final @Nullable RowType keyType;
 
     public TableCollectCoordinationRequest(
             long id,
@@ -59,13 +70,17 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
             boolean isBounded,
             long batchSize,
             String operatorId,
-            int subtaskId) {
+            int subtaskId,
+            @Nullable RowData key,
+            @Nullable RowType keyType) {
         this.id = id;
         this.isCanceled = isCanceled;
         this.batchSize = batchSize;
         this.operatorId = operatorId;
         this.subtaskId = subtaskId;
         this.isBounded = isBounded;
+        this.key = key;
+        this.keyType = keyType;
     }
 
     public TableCollectCoordinationRequest(DataInputView inView) throws IOException {
@@ -75,6 +90,18 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
         this.batchSize = batchSizeSerializer.deserialize(inView);
         this.operatorId = operatorIdSerializer.deserialize(inView);
         this.subtaskId = subtaskIdSerializer.deserialize(inView);
+        boolean hasKey = hasKeySerializer.deserialize(inView);
+        if (hasKey) {
+            String rowTypeStr = keyTypeSerializer.deserialize(inView);
+            // TODO improve it
+            keyType = (RowType) LogicalTypeParser.parse(rowTypeStr);
+            TypeSerializer<RowData> keySerializer =
+                    InternalTypeInfo.of(keyType).createSerializer(new ExecutionConfig());
+            this.key = keySerializer.deserialize(inView);
+        } else {
+            this.key = null;
+            this.keyType = null;
+        }
     }
 
     public long getId() {
@@ -101,6 +128,11 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
         return subtaskId;
     }
 
+    @Nullable
+    public RowData getKey() {
+        return key;
+    }
+
     public void serialize(DataOutputView outView) throws IOException {
         idSerializer.serialize(id, outView);
         isCanceledSerializer.serialize(isCanceled, outView);
@@ -108,6 +140,15 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
         batchSizeSerializer.serialize(batchSize, outView);
         operatorIdSerializer.serialize(operatorId, outView);
         subtaskIdSerializer.serialize(subtaskId, outView);
+        if (key != null && keyType != null) {
+            hasKeySerializer.serialize(true, outView);
+            keyTypeSerializer.serialize(keyType.asSerializableString(), outView);
+            TypeSerializer<RowData> keySerializer =
+                    InternalTypeInfo.of(keyType).createSerializer(new ExecutionConfig());
+            keySerializer.serialize(key, outView);
+        } else {
+            hasKeySerializer.serialize(false, outView);
+        }
     }
 
     @Override
@@ -126,6 +167,8 @@ public class TableCollectCoordinationRequest implements CoordinationRequest {
                 + '\''
                 + ", subtaskId="
                 + subtaskId
+                + ", hasKey="
+                + (key != null)
                 + '}';
     }
 }

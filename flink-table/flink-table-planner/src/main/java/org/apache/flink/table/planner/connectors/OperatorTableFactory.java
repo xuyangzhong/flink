@@ -22,16 +22,20 @@ package org.apache.flink.table.planner.connectors;
 import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
+import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.types.logical.RowType;
+import org.apache.flink.table.types.logical.utils.LogicalTypeParser;
+import org.apache.flink.types.RowKind;
 
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
@@ -50,7 +54,22 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
         Map<String, String> properties = context.getCatalogTable().getOptions();
         String endpoint = properties.getOrDefault("endpoint", "http://localhost:8080");
         String jobId = properties.get("job_id");
-        int parallelism = Integer.valueOf(properties.getOrDefault("parallelism", "1"));
+        String keyTypeStr = properties.getOrDefault("key_type", null);
+        RowType keyType = null;
+        if (keyTypeStr != null) {
+            keyType = (RowType) LogicalTypeParser.parse(keyTypeStr);
+        }
+        String changelogModeStr = properties.getOrDefault("changelog_mode", null);
+        ChangelogMode changelogMode = ChangelogMode.all();
+        if (changelogModeStr != null) {
+            ChangelogMode.Builder builder = ChangelogMode.newBuilder();
+            Arrays.stream(changelogModeStr.split(","))
+                    .map(Byte::valueOf)
+                    .map(RowKind::fromByteValue)
+                    .forEach(builder::addContainedKind);
+            changelogMode = builder.build();
+        }
+        int parallelism = Integer.parseInt(properties.getOrDefault("parallelism", "1"));
         RowType rowType = (RowType) context.getPhysicalRowDataType().getLogicalType();
         RuntimeExecutionMode mode = context.getConfiguration().get(ExecutionOptions.RUNTIME_MODE);
         boolean isBounded = mode.equals(RuntimeExecutionMode.BATCH);
@@ -60,7 +79,9 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
                 fromUID(context.getObjectIdentifier().getObjectName()),
                 parallelism,
                 rowType,
-                isBounded);
+                isBounded,
+                changelogMode,
+                keyType);
     }
 
     private static String fromUID(String headOpUid) {

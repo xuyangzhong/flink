@@ -28,12 +28,15 @@ import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.config.OptimizerConfigOptions;
 import org.apache.flink.table.catalog.CatalogOpTable;
 import org.apache.flink.table.catalog.ObjectIdentifier;
+import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.delegation.Planner;
 import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.nodes.exec.common.CommonExecExchange;
 import org.apache.flink.table.planner.plan.nodes.exec.visitor.ExecNodeVisitor;
 import org.apache.flink.table.types.logical.LogicalType;
+import org.apache.flink.table.types.logical.RowType;
 import org.apache.flink.table.types.utils.TypeConversions;
+import org.apache.flink.types.RowKind;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnore;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
@@ -42,6 +45,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.apache.flink.configuration.PipelineOptionsInternal.PIPELINE_FIXED_JOB_ID;
 import static org.apache.flink.util.Preconditions.checkArgument;
@@ -174,6 +178,19 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         options.put("digest", digest);
         options.put("job_id", jobId);
         options.put("op_id", operatorId);
+        RowType keyType = getKeyType();
+        if (keyType != null) {
+            options.put("key_type", keyType.asSerializableString());
+        }
+        ChangelogMode changelogMode = getChangelogMode();
+        if (changelogMode != null) {
+      options.put(
+          "changelog_mode",
+          changelogMode.getContainedKinds().stream()
+              .map(RowKind::toByteValue)
+              .map(Object::toString)
+              .collect(Collectors.joining(",")));
+        }
         int parallelism =
                 ((StreamGraph) streamGraph)
                         .getStreamNodes().stream()

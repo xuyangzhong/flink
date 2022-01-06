@@ -19,6 +19,7 @@
 package org.apache.flink.table.planner.plan.nodes.exec;
 
 import org.apache.flink.annotation.Internal;
+import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.plan.nodes.exec.serde.LogicalTypeJsonDeserializer;
 import org.apache.flink.table.planner.plan.nodes.exec.serde.LogicalTypeJsonSerializer;
@@ -116,6 +117,16 @@ public interface ExecNode<T> extends ExecNodeTranslator<T> {
     @JsonIgnore
     default boolean supportConsume() {
         return true;
+    }
+
+    @JsonIgnore
+    default ChangelogMode getChangelogMode() {
+        return null;
+    }
+
+    @JsonIgnore
+    default RowType getKeyType() {
+        return null;
     }
 
     @JsonIgnore

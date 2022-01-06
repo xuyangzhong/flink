@@ -111,6 +111,7 @@ class StreamPhysicalGlobalGroupAggregate(
       generateUpdateBefore,
       needRetraction,
       indexOfCountStar.map(Integer.valueOf).orNull,
+      ChangelogPlanUtils.getChangelogMode(this).orNull,
       InputProperty.DEFAULT,
       FlinkTypeFactory.toLogicalRowType(getRowType),
       getRelDetailedDescription

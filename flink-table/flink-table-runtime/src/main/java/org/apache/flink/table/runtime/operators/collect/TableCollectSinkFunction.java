@@ -31,6 +31,7 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkFunction;
+import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.NetUtils;
 import org.apache.flink.util.Preconditions;
 
@@ -205,6 +206,7 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
 
                     List<byte[]> nextBatch = new LinkedList<>();
 
+                    RowData key = request.getKey();
                     long id = request.getId();
                     synchronized (buffers) {
                         if (id == -1) {
@@ -212,7 +214,11 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
                             if (request.isBounded()) {
                                 boundedId.add(id);
                             }
-                            collectible.startConsume(id);
+                            if (key != null) {
+                                collectible.startLookup(key, id);
+                            } else {
+                                collectible.startConsume(id);
+                            }
                         } else if (buffers.containsKey(id)) {
                             if (request.isCanceled()) {
                                 // cancel

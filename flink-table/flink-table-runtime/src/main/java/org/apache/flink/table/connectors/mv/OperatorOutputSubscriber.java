@@ -33,6 +33,8 @@ import org.apache.flink.table.runtime.operators.collect.TableCollectCoordination
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.RowType;
 
+import javax.annotation.Nullable;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,6 +54,8 @@ public class OperatorOutputSubscriber
     private final int parallelism;
     private final RowType rowType;
     private final boolean isBounded;
+    private final @Nullable RowData key;
+    private final @Nullable RowType keyType;
     private final HashMap<Integer, Long> ids = new HashMap<>();
 
     public OperatorOutputSubscriber(
@@ -60,13 +64,17 @@ public class OperatorOutputSubscriber
             String operatorId,
             int parallelism,
             RowType rowType,
-            boolean isBounded) {
+            boolean isBounded,
+            @Nullable RowData key,
+            @Nullable RowType keyType) {
         this.endpoint = endpoint;
         this.jobId = jobId;
         this.operatorId = operatorId;
         this.parallelism = parallelism;
         this.rowType = rowType;
         this.isBounded = isBounded;
+        this.key = key;
+        this.keyType = keyType;
     }
 
     @Override
@@ -95,7 +103,9 @@ public class OperatorOutputSubscriber
                                 isBounded,
                                 1,
                                 opId.toString(),
-                                subtask);
+                                subtask,
+                                key,
+                                keyType);
                 TableCollectCoordinationResponse response =
                         (TableCollectCoordinationResponse)
                                 client.sendCoordinationRequest(jId, opId, request).get();
@@ -122,7 +132,9 @@ public class OperatorOutputSubscriber
             for (int subtask = 0; subtask < parallelism; subtask++) {
                 TableCollectCoordinationRequest request =
                         new TableCollectCoordinationRequest(
-                                ids.get(subtask), true, isBounded, 1, opId.toString(), subtask);
+                                ids.get(subtask), true, isBounded, 1, opId.toString(), subtask,
+                                key,
+                                keyType);
                 client.sendCoordinationRequest(jId, opId, request).get();
             }
         } catch (Exception ignored) {

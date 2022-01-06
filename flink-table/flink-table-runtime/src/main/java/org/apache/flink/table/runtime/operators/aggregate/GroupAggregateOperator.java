@@ -22,6 +22,7 @@ import org.apache.flink.runtime.operators.coordination.OperatorEvent;
 import org.apache.flink.runtime.state.VoidNamespace;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.operators.collect.AbstractKeyedProcessOperatorWithCollector;
+import org.apache.flink.table.runtime.operators.collect.Lookupable;
 import org.apache.flink.table.runtime.operators.collect.Scannable;
 import org.apache.flink.table.runtime.operators.collect.TableCollectSinkFunction;
 
@@ -31,7 +32,7 @@ import java.util.stream.Stream;
 /** GroupAggregateOperator. */
 public class GroupAggregateOperator
         extends AbstractKeyedProcessOperatorWithCollector<RowData, RowData, RowData>
-        implements Scannable<RowData> {
+        implements Scannable<RowData>, Lookupable<RowData, RowData> {
 
     private static final long serialVersionUID = 1L;
 
@@ -61,6 +62,19 @@ public class GroupAggregateOperator
                     }
                 });
         LOG.info("end scan for subscriber " + id + " row: " + count.get());
+    }
+
+    @Override
+    public void lookup(TableCollectSinkFunction<RowData> sink, RowData key, long id) {
+        try {
+            RowData value = ((GroupAggFunction) getUserFunction()).getCurrentValue(key);
+            if (value != null) {
+                sink.invoke(value, id);
+            }
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+        LOG.info("end lookup for subscriber " + id);
     }
 
     @Override

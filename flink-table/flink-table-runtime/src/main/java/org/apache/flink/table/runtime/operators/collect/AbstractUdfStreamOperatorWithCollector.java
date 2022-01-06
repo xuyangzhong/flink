@@ -35,6 +35,7 @@ import org.apache.flink.streaming.api.operators.Output;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.streaming.runtime.tasks.StreamTask;
 import org.apache.flink.streaming.util.functions.StreamingFunctionUtils;
+import org.apache.flink.table.data.RowData;
 
 /**
  * This is used as the base class for operators that have a user-defined function. This class
@@ -84,6 +85,18 @@ public abstract class AbstractUdfStreamOperatorWithCollector<OUT, F extends Func
                     collectFunction.markScanFinished(id);
                 },
                 "subscribe");
+    }
+
+    @Override
+    public void startLookup(RowData key, long id) {
+        executor.submit(
+                () -> {
+                    if (AbstractUdfStreamOperatorWithCollector.this instanceof Lookupable) {
+                        ((Lookupable) AbstractUdfStreamOperatorWithCollector.this)
+                                .lookup(collectFunction, key, id);
+                    }
+                },
+                "lookup");
     }
 
     // ------------------------------------------------------------------------
