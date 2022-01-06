@@ -19,8 +19,10 @@
 
 package org.apache.flink.table.planner.connectors;
 
+import org.apache.flink.api.common.RuntimeExecutionMode;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
+import org.apache.flink.configuration.ExecutionOptions;
 import org.apache.flink.table.connector.source.DynamicTableSource;
 import org.apache.flink.table.factories.DynamicTableSourceFactory;
 import org.apache.flink.table.types.logical.RowType;
@@ -50,7 +52,8 @@ public class OperatorTableFactory implements DynamicTableSourceFactory {
         String jobId = properties.get("job_id");
         int parallelism = Integer.valueOf(properties.getOrDefault("parallelism", "1"));
         RowType rowType = (RowType) context.getPhysicalRowDataType().getLogicalType();
-        boolean isBounded = Boolean.valueOf(properties.getOrDefault("is_bounded", "false"));
+        RuntimeExecutionMode mode = context.getConfiguration().get(ExecutionOptions.RUNTIME_MODE);
+        boolean isBounded = mode.equals(RuntimeExecutionMode.BATCH);
         return new OperatorTableSource(
                 endpoint,
                 jobId,
