@@ -75,7 +75,11 @@ class StreamPlanner(
     executor.setSubmitCallback((client, streamGraph) => {
       val jobId = client.getJobID.toHexString;
       if (execGraph.getRootNodes.size() != 1
-        || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink]
+        || (execGraph.getRootNodes.get(0).isInstanceOf[CommonExecSink] &&
+        // ignore collect sink
+        !execGraph.getRootNodes.get(0).asInstanceOf[CommonExecSink]
+          .getTableSinkSpec.getObjectIdentifier.getObjectName
+          .startsWith("Unregistered_Collect_Sink_"))
         || execGraph.getRootNodes.get(0).isInstanceOf[CommonExecLegacySink[_]]) {
         val properties = new util.HashMap[String, String]()
         properties.put("type", "job")
