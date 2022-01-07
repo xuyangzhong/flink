@@ -89,6 +89,7 @@ class StreamPhysicalGroupAggregate(
       aggCallNeedRetractions,
       generateUpdateBefore,
       needRetraction,
+      ChangelogPlanUtils.getChangelogMode(this).orNull,
       InputProperty.DEFAULT,
       FlinkTypeFactory.toLogicalRowType(getRowType),
       getRelDetailedDescription

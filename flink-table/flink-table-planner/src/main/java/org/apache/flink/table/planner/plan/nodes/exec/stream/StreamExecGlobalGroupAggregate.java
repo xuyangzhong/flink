@@ -78,7 +78,6 @@ public class StreamExecGlobalGroupAggregate extends StreamExecAggregateBase {
 
     public static final String FIELD_NAME_LOCAL_AGG_INPUT_ROW_TYPE = "localAggInputRowType";
     public static final String FIELD_NAME_INDEX_OF_COUNT_STAR = "indexOfCountStar";
-    public static final String FIELD_NAME_CHANGELOG_MODE = "changelogMode";
 
     @JsonProperty(FIELD_NAME_GROUPING)
     private final int[] grouping;

@@ -184,12 +184,12 @@ public abstract class ExecNodeBase<T> implements ExecNode<T> {
         }
         ChangelogMode changelogMode = getChangelogMode();
         if (changelogMode != null) {
-      options.put(
-          "changelog_mode",
-          changelogMode.getContainedKinds().stream()
-              .map(RowKind::toByteValue)
-              .map(Object::toString)
-              .collect(Collectors.joining(",")));
+            options.put(
+                    "changelog_mode",
+                    changelogMode.getContainedKinds().stream()
+                            .map(RowKind::toByteValue)
+                            .map(Object::toString)
+                            .collect(Collectors.joining(",")));
         }
         int parallelism =
                 ((StreamGraph) streamGraph)

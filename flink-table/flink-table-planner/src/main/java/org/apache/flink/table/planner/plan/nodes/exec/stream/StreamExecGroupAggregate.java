@@ -23,6 +23,7 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.api.TableConfig;
 import org.apache.flink.table.api.config.ExecutionConfigOptions;
+import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.EqualiserCodeGenerator;
@@ -50,6 +51,7 @@ import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonInclude;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.apache.calcite.rel.core.AggregateCall;
@@ -90,12 +92,17 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
     @JsonProperty(FIELD_NAME_NEED_RETRACTION)
     private final boolean needRetraction;
 
+    @JsonProperty(FIELD_NAME_CHANGELOG_MODE)
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    protected final ChangelogMode changelogMode;
+
     public StreamExecGroupAggregate(
             int[] grouping,
             AggregateCall[] aggCalls,
             boolean[] aggCallNeedRetractions,
             boolean generateUpdateBefore,
             boolean needRetraction,
+            ChangelogMode changelogMode,
             InputProperty inputProperty,
             RowType outputType,
             String description) {
@@ -106,6 +113,7 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
                 generateUpdateBefore,
                 needRetraction,
                 getNewNodeId(),
+                changelogMode,
                 Collections.singletonList(inputProperty),
                 outputType,
                 description);
@@ -119,6 +127,7 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
             @JsonProperty(FIELD_NAME_GENERATE_UPDATE_BEFORE) boolean generateUpdateBefore,
             @JsonProperty(FIELD_NAME_NEED_RETRACTION) boolean needRetraction,
             @JsonProperty(FIELD_NAME_ID) int id,
+            @JsonProperty(FIELD_NAME_CHANGELOG_MODE) ChangelogMode changelogMode,
             @JsonProperty(FIELD_NAME_INPUT_PROPERTIES) List<InputProperty> inputProperties,
             @JsonProperty(FIELD_NAME_OUTPUT_TYPE) RowType outputType,
             @JsonProperty(FIELD_NAME_DESCRIPTION) String description) {
@@ -129,6 +138,7 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
         checkArgument(aggCalls.length == aggCallNeedRetractions.length);
         this.generateUpdateBefore = generateUpdateBefore;
         this.needRetraction = needRetraction;
+        this.changelogMode = changelogMode;
     }
 
     @SuppressWarnings("unchecked")
@@ -240,5 +250,26 @@ public class StreamExecGroupAggregate extends StreamExecAggregateBase {
     @Override
     public boolean supportConsume() {
         return true;
+    }
+
+    @Override
+    public ChangelogMode getChangelogMode() {
+        return changelogMode;
+    }
+
+    @Override
+    public RowType getKeyType() {
+        final RowType inputRowType = (RowType) getInputEdges().get(0).getOutputType();
+        LogicalType[] types =
+                Arrays.stream(grouping)
+                        .boxed()
+                        .map(inputRowType::getTypeAt)
+                        .toArray(LogicalType[]::new);
+        String[] names =
+                Arrays.stream(grouping)
+                        .boxed()
+                        .map(i -> inputRowType.getFieldNames().get(i))
+                        .toArray(String[]::new);
+        return RowType.of(types, names);
     }
 }

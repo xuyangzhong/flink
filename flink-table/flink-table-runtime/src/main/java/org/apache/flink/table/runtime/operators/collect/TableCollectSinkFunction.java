@@ -31,6 +31,7 @@ import org.apache.flink.streaming.api.checkpoint.CheckpointedFunction;
 import org.apache.flink.streaming.api.functions.sink.RichSinkFunction;
 import org.apache.flink.streaming.api.operators.StreamingRuntimeContext;
 import org.apache.flink.streaming.api.operators.collect.CollectSinkFunction;
+import org.apache.flink.table.connectors.mv.SerdeUtil;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.util.NetUtils;
 import org.apache.flink.util.Preconditions;
@@ -206,7 +207,7 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
 
                     List<byte[]> nextBatch = new LinkedList<>();
 
-                    RowData key = request.getKey();
+                    RowData key = getKey(request);
                     long id = request.getId();
                     synchronized (buffers) {
                         if (id == -1) {
@@ -321,6 +322,15 @@ public class TableCollectSinkFunction<IN> extends RichSinkFunction<IN>
                 serverSocket.close();
             } catch (Exception e) {
                 LOG.warn("Error occurs when closing server in CommonCollectSinkFunction", e);
+            }
+        }
+
+        private RowData getKey(TableCollectCoordinationRequest request) {
+            try {
+                return SerdeUtil.deserialize(request.getKey(), request.getKeyType());
+            } catch (IOException e) {
+                LOG.warn("Error occurs when deserialize key", e);
+                return null;
             }
         }
     }

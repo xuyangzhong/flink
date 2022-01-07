@@ -95,6 +95,7 @@ public abstract class AbstractUdfStreamOperatorWithCollector<OUT, F extends Func
                         ((Lookupable) AbstractUdfStreamOperatorWithCollector.this)
                                 .lookup(collectFunction, key, id);
                     }
+                    collectFunction.markScanFinished(id);
                 },
                 "lookup");
     }

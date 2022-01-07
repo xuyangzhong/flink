@@ -20,14 +20,17 @@
 package org.apache.flink.table.planner.connectors;
 
 import org.apache.flink.api.java.tuple.Tuple2;
+import org.apache.flink.table.api.TableException;
 import org.apache.flink.table.connector.ChangelogMode;
 import org.apache.flink.table.connector.source.DynamicTableSource;
+import org.apache.flink.table.connector.source.LookupTableSource;
 import org.apache.flink.table.connector.source.ScanTableSource;
 import org.apache.flink.table.connector.source.SourceFunctionProvider;
+import org.apache.flink.table.connector.source.TableFunctionProvider;
 import org.apache.flink.table.connector.source.abilities.SupportsFilterPushDown;
+import org.apache.flink.table.connectors.mv.OperatorOutputLookup;
 import org.apache.flink.table.connectors.mv.OperatorOutputSubscriber;
-import org.apache.flink.table.data.GenericRowData;
-import org.apache.flink.table.data.RowData;
+import org.apache.flink.table.connectors.mv.SerdeUtil;
 import org.apache.flink.table.expressions.CallExpression;
 import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.expressions.ResolvedExpression;
@@ -35,16 +38,23 @@ import org.apache.flink.table.expressions.ValueLiteralExpression;
 import org.apache.flink.table.functions.BuiltInFunctionDefinitions;
 import org.apache.flink.table.types.logical.RowType;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import javax.annotation.Nullable;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /** OperatorTableSource. */
-public class OperatorTableSource implements ScanTableSource, SupportsFilterPushDown {
+public class OperatorTableSource
+        implements ScanTableSource, LookupTableSource, SupportsFilterPushDown {
+    private static final Logger LOG = LoggerFactory.getLogger(OperatorTableSource.class);
 
     private final String endpoint;
     private final String jobId;
@@ -54,7 +64,7 @@ public class OperatorTableSource implements ScanTableSource, SupportsFilterPushD
     private final boolean isBounded;
     private final ChangelogMode changelogMode;
     private final @Nullable RowType keyType;
-    private @Nullable RowData key;
+    private @Nullable byte[] key;
 
     public OperatorTableSource(
             String endpoint,
@@ -86,7 +96,7 @@ public class OperatorTableSource implements ScanTableSource, SupportsFilterPushD
             boolean isBounded,
             ChangelogMode changelogMode,
             @Nullable RowType keyType,
-            @Nullable RowData key) {
+            @Nullable byte[] key) {
         this.endpoint = endpoint;
         this.jobId = jobId;
         this.rowType = rowType;
@@ -127,6 +137,14 @@ public class OperatorTableSource implements ScanTableSource, SupportsFilterPushD
 
     @Override
     public ScanRuntimeProvider getScanRuntimeProvider(ScanContext runtimeProviderContext) {
+        LOG.info(
+                "use ScanRuntimeProvider: jobId={}, operatorId={} parallelism={}, isBounded={}, key={}, keyType={}",
+                jobId,
+                operatorId,
+                parallelism,
+                isBounded,
+                key,
+                keyType);
         return SourceFunctionProvider.of(
                 new OperatorOutputSubscriber(
                         endpoint, jobId, operatorId, parallelism, rowType, isBounded, key, keyType),
@@ -134,7 +152,30 @@ public class OperatorTableSource implements ScanTableSource, SupportsFilterPushD
     }
 
     @Override
+    public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
+        if (keyType == null) {
+            throw new TableException(
+                    String.format(
+                            "%s does not defined key, so does not support LookupTableSource",
+                            operatorId));
+        }
+        LOG.info(
+                "use LookupRuntimeProvider: jobId={}, operatorId={} parallelism={}, key={}, keyType={}",
+                jobId,
+                operatorId,
+                parallelism,
+                key,
+                keyType);
+
+        return TableFunctionProvider.of(
+                // only lookup the latest one
+                new OperatorOutputLookup(
+                        endpoint, jobId, operatorId, parallelism, rowType, keyType));
+    }
+
+    @Override
     public Result applyFilters(List<ResolvedExpression> filters) {
+        LOG.info("try push filters={}, keyType={}", filters, keyType);
         List<ResolvedExpression> acceptedFilters = new ArrayList<>();
         List<ResolvedExpression> remainingFilters = new ArrayList<>();
         if (keyType != null) {
@@ -150,8 +191,15 @@ public class OperatorTableSource implements ScanTableSource, SupportsFilterPushD
                 }
             }
             if (map.keySet().equals(new HashSet<>(keyFields))) {
-                Object[] values = keyFields.stream().map(map::get).toArray();
-                key = GenericRowData.of(values);
+                LOG.info("apply filter push down");
+                Object[] value = keyFields.stream().map(map::get).toArray();
+                try {
+                    key = SerdeUtil.serialize(value, keyType);
+                } catch (IOException e) {
+                    LOG.info("Failed to serialize key");
+                    remainingFilters.clear();
+                    remainingFilters.addAll(filters);
+                }
             } else {
                 remainingFilters.clear();
                 remainingFilters.addAll(filters);
@@ -194,10 +242,11 @@ public class OperatorTableSource implements ScanTableSource, SupportsFilterPushD
             List<String> filterableFields) {
         String name = ref.getName();
         if (filterableFields.contains(name)) {
-            Object v = value.getValueAs(value.getOutputDataType().getConversionClass());
-            return new Tuple2<>(name, v);
-        } else {
-            return null;
+            Optional<?> opt = value.getValueAs(value.getOutputDataType().getConversionClass());
+            if (opt.isPresent()) {
+                return new Tuple2<>(name, opt.get());
+            }
         }
+        return null;
     }
 }

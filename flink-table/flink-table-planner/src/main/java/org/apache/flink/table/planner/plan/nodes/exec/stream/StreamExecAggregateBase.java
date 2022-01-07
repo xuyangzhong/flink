@@ -38,6 +38,7 @@ public abstract class StreamExecAggregateBase extends ExecNodeBase<RowData>
     public static final String FIELD_NAME_AGG_CALL_NEED_RETRACTIONS = "aggCallNeedRetractions";
     public static final String FIELD_NAME_GENERATE_UPDATE_BEFORE = "generateUpdateBefore";
     public static final String FIELD_NAME_NEED_RETRACTION = "needRetraction";
+    public static final String FIELD_NAME_CHANGELOG_MODE = "changelogMode";
 
     protected StreamExecAggregateBase(
             int id,
