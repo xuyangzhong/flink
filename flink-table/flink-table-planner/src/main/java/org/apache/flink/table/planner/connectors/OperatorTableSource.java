@@ -178,6 +178,9 @@ public class OperatorTableSource
         LOG.info("try push filters={}, keyType={}", filters, keyType);
         List<ResolvedExpression> acceptedFilters = new ArrayList<>();
         List<ResolvedExpression> remainingFilters = new ArrayList<>();
+        if (!isBounded) {
+            return Result.of(acceptedFilters, filters);
+        }
         if (keyType != null) {
             Map<String, Object> map = new HashMap<>();
             List<String> keyFields = keyType.getFieldNames();
