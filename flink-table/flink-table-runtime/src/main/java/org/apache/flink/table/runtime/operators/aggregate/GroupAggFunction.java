@@ -219,6 +219,7 @@ public class GroupAggFunction extends KeyedProcessFunction<RowData, RowData, Row
         RowData acc = accState.value();
         if (acc != null) {
             function.setAccumulators(acc);
+            resultRow.setRowKind(RowKind.INSERT);
             resultRow.replace(key, function.getValue());
             return resultRow;
         } else {
