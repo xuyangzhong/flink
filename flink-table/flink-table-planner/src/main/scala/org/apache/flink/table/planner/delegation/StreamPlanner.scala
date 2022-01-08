@@ -85,18 +85,19 @@ class StreamPlanner(
         properties.put("type", "job")
         catalogManager.getCatalog(catalogManager.getCurrentCatalog).get().createDatabase(
           jobId, new CatalogDatabaseImpl(properties, ""), false)
-      }
 
-      val visitor = new AbstractExecNodeExactlyOnceVisitor {
-        override protected def visitNode(node: ExecNode[_]): Unit = {
-          if (node.isInstanceOf[ExecNodeBase[_]]) {
-            node.asInstanceOf[ExecNodeBase[_]]
-              .registerExecNode(jobId, StreamPlanner.this, streamGraph)
+        val visitor = new AbstractExecNodeExactlyOnceVisitor {
+          override protected def visitNode(node: ExecNode[_]): Unit = {
+            node match {
+              case e: ExecNodeBase[_] =>
+                e.registerExecNode(jobId, StreamPlanner.this, streamGraph)
+              case _ =>
+            }
+            visitInputs(node)
           }
-          visitInputs(node)
         }
+        execGraph.getRootNodes.forEach((n: ExecNode[_]) => n.accept(visitor))
       }
-      execGraph.getRootNodes.forEach((n: ExecNode[_]) => n.accept(visitor))
     })
 
     validateAndOverrideConfiguration()
