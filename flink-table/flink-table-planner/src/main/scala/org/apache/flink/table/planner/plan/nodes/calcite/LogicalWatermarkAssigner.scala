@@ -17,8 +17,11 @@
  */
 package org.apache.flink.table.planner.plan.nodes.calcite
 
+import org.apache.flink.table.planner.{JArrayList, JList}
+
 import org.apache.calcite.plan._
 import org.apache.calcite.rel.RelNode
+import org.apache.calcite.rel.hint.RelHint
 import org.apache.calcite.rex.RexNode
 
 /**
@@ -31,16 +34,20 @@ final class LogicalWatermarkAssigner(
     traits: RelTraitSet,
     input: RelNode,
     rowtimeFieldIndex: Int,
-    watermarkExpr: RexNode)
-  extends WatermarkAssigner(cluster, traits, input, rowtimeFieldIndex, watermarkExpr) {
+    watermarkExpr: RexNode,
+    hints: JList[RelHint] = new JArrayList[RelHint])
+  extends WatermarkAssigner(cluster, traits, input, rowtimeFieldIndex, watermarkExpr, hints) {
 
   override def copy(
       traitSet: RelTraitSet,
       input: RelNode,
       rowtime: Int,
       watermark: RexNode): RelNode = {
-    new LogicalWatermarkAssigner(cluster, traitSet, input, rowtime, watermark)
+    new LogicalWatermarkAssigner(cluster, traitSet, input, rowtime, watermark, hints)
   }
+
+  override def withHints(hintList: JList[RelHint]): RelNode =
+    new LogicalWatermarkAssigner(cluster, traits, input, rowtimeFieldIndex, watermarkExpr, hintList)
 }
 
 object LogicalWatermarkAssigner {

@@ -20,6 +20,7 @@ package org.apache.flink.table.planner.plan.reuse
 import org.apache.flink.configuration.ReadableConfig
 import org.apache.flink.table.api.TableException
 import org.apache.flink.table.api.config.OptimizerConfigOptions
+import org.apache.flink.table.planner.hint.FlinkHints
 import org.apache.flink.table.planner.plan.nodes.calcite.{LegacySink, Sink}
 import org.apache.flink.table.planner.plan.nodes.logical.{FlinkLogicalLegacyTableSourceScan, FlinkLogicalTableSourceScan}
 import org.apache.flink.table.planner.plan.nodes.physical.common.{CommonPhysicalLegacyTableSourceScan, CommonPhysicalTableSourceScan}
@@ -31,6 +32,7 @@ import org.apache.calcite.rel.core.{Exchange, TableFunctionScan}
 
 import java.util
 
+import scala.annotation.tailrec
 import scala.collection.JavaConversions._
 
 /**
@@ -127,21 +129,29 @@ object SubplanReuser {
     private def isReusableNodes(reusableNodes: List[RelNode]): Boolean = {
       if (reusableNodes.size() > 1) {
         // Does not reuse nodes which are reusable disabled
-        !isNodeReusableDisabled(reusableNodes.head)
+        !isNodeReusableDisabled(reusableNodes)
       } else {
         false
       }
     }
 
     /** Returns true if the given node is reusable disabled */
-    private def isNodeReusableDisabled(node: RelNode): Boolean = {
-      node match {
+    @tailrec
+    private def isNodeReusableDisabled(nodes: List[RelNode]): Boolean = {
+      // forbid reusing Join with multiple different join hints
+      if (FlinkHints.checkJoinHintsConflictBetweenNodes(nodes)) {
+        return false
+      }
+
+      // forbid reusing these special nodes
+      val headNode = nodes.head
+      headNode match {
         // TableSourceScan node can not be reused if reuse TableSource disabled
         case _: FlinkLogicalLegacyTableSourceScan | _: CommonPhysicalLegacyTableSourceScan |
             _: FlinkLogicalTableSourceScan | _: CommonPhysicalTableSourceScan =>
           !tableSourceReuseEnabled
         // Exchange node can not be reused if its input is reusable disabled
-        case e: Exchange => isNodeReusableDisabled(e.getInput)
+        case e: Exchange => isNodeReusableDisabled(List(e.getInput))
         // TableFunctionScan and sink can not be reused
         case _: TableFunctionScan | _: LegacySink | _: Sink => true
         case _ => false

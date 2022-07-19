@@ -34,6 +34,75 @@ class CalcTest extends TableTestBase {
   util.addTableSource[(Long, Int, String)]("MyTable", 'a, 'b, 'c)
 
   @Test
+  def test(): Unit = {
+    util.addTable(s"""
+                     |CREATE TABLE test1 (
+                     |  `a` INT,
+                     |  `b` STRING,
+                     |  `c` BIGINT
+                     |) WITH (
+                     |  'bounded' = 'true',
+                     |  'connector' = 'values'
+                     |)
+                     |""".stripMargin)
+
+    util.addTable(s"""
+                     |CREATE TABLE test2 (
+                     |  `a` INT,
+                     |  `b` STRING,
+                     |  `c` BIGINT
+                     |) WITH (
+                     |  'bounded' = 'true',
+                     |  'connector' = 'values'
+                     |)
+                     |""".stripMargin)
+
+    util.addTable(s"""
+                     |CREATE TABLE test3 (
+                     |  `a` INT,
+                     |  `b` STRING,
+                     |  `c` BIGINT
+                     |) WITH (
+                     |  'bounded' = 'true',
+                     |  'connector' = 'values'
+                     |)
+                     |""".stripMargin)
+
+    util.addTable(s"""
+                     |CREATE TABLE sink1 (
+                     |  `a` INT
+                     |) WITH (
+                     |  'bounded' = 'true',
+                     |  'connector' = 'values'
+                     |)
+                     |""".stripMargin)
+
+    util.addTable(s"""
+                     |CREATE TABLE sink2 (
+                     |  `a` INT
+                     |) WITH (
+                     |  'bounded' = 'true',
+                     |  'connector' = 'values'
+                     |)
+                     |""".stripMargin)
+
+    val sql =
+      s"""
+         | select /*+ BROADCAST(test1) */* from test1 join test2 on test1.a = test2.a
+         |""".stripMargin
+    util.verifyRelPlan(sql)
+
+//    val set = util.tableEnv.createStatementSet();
+//    set.addInsertSql(
+//      "insert into sink1 select test1.a from test1 join test2 on test1.a = test2.a")
+//    set.addInsertSql(
+//      "insert into sink2 select test1.a + 1 from test1" +
+//        " join test2 on test1.a = test2.a where test1.a > 5")
+//
+//    util.verifyExecPlan(set)
+  }
+
+  @Test
   def testOnlyProject(): Unit = {
     util.verifyExecPlan("SELECT a, c FROM MyTable")
   }

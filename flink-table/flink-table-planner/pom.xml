@@ -109,7 +109,8 @@ under the License.
 			<groupId>org.apache.calcite</groupId>
 			<artifactId>calcite-core</artifactId>
 			<!-- When updating the Calcite version, make sure to update the dependency exclusions -->
-			<version>${calcite.version}</version>
+<!--			<version>${calcite.version}</version>-->
+			<version>1.26.8-ververica-SNAPSHOT</version>
 			<exclusions>
 				<!--
 				"mvn dependency:tree" as of Calcite 1.26.0:

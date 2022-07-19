@@ -17,11 +17,14 @@
  */
 package org.apache.flink.table.planner.plan.nodes.calcite
 
+import org.apache.flink.table.planner.{JArrayList, JList}
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 
+import com.google.common.collect.ImmutableList
 import org.apache.calcite.plan.{RelOptCluster, RelTraitSet}
 import org.apache.calcite.rel.`type`.{RelDataType, RelDataTypeFieldImpl}
 import org.apache.calcite.rel.{RelNode, RelWriter, SingleRel}
+import org.apache.calcite.rel.hint.{Hintable, RelHint}
 import org.apache.calcite.rex.RexNode
 import org.apache.calcite.sql.`type`.SqlTypeName
 
@@ -35,8 +38,13 @@ abstract class WatermarkAssigner(
     traits: RelTraitSet,
     inputRel: RelNode,
     val rowtimeFieldIndex: Int,
-    val watermarkExpr: RexNode)
-  extends SingleRel(cluster, traits, inputRel) {
+    val watermarkExpr: RexNode,
+    hints: JList[RelHint] = new JArrayList[RelHint])
+  extends SingleRel(cluster, traits, inputRel)
+  with Hintable {
+
+  protected val hintList: ImmutableList[RelHint] =
+    ImmutableList.copyOf(hints.iterator())
 
   override def deriveRowType(): RelDataType = {
     val inputRowType = inputRel.getRowType
@@ -58,6 +66,8 @@ abstract class WatermarkAssigner(
     builder.addAll(newFieldList)
     builder.build()
   }
+
+  override def getHints: ImmutableList[RelHint] = hintList
 
   override def explainTerms(pw: RelWriter): RelWriter = {
     val rowtimeFieldName = inputRel.getRowType.getFieldNames.get(rowtimeFieldIndex)

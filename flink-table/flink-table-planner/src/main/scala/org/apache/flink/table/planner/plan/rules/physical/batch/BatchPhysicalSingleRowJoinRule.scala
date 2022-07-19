@@ -17,6 +17,7 @@
  */
 package org.apache.flink.table.planner.plan.rules.physical.batch
 
+import org.apache.flink.table.planner.hint.JoinStrategy
 import org.apache.flink.table.planner.plan.nodes.FlinkConventions
 import org.apache.flink.table.planner.plan.nodes.logical.FlinkLogicalJoin
 import org.apache.flink.table.planner.plan.nodes.physical.batch.BatchPhysicalNestedLoopJoin
@@ -41,15 +42,22 @@ class BatchPhysicalSingleRowJoinRule
   with BatchPhysicalNestedLoopJoinRuleBase {
 
   override def matches(call: RelOptRuleCall): Boolean = {
-    val join: Join = call.rel(0)
-    join.getJoinType match {
-      case JoinRelType.INNER | JoinRelType.FULL =>
-        isSingleRow(join.getLeft) || isSingleRow(join.getRight)
-      case JoinRelType.LEFT => isSingleRow(join.getRight)
-      case JoinRelType.RIGHT => isSingleRow(join.getLeft)
-      case JoinRelType.SEMI | JoinRelType.ANTI => isSingleRow(join.getRight)
-      case _ => false
+    val isValidNestLoopJoin = checkMatchJoinStrategy(call, JoinStrategy.NEST_LOOP)
+
+    if (!isValidNestLoopJoin) {
+      false
+    } else {
+      val join: Join = call.rel(0)
+      join.getJoinType match {
+        case JoinRelType.INNER | JoinRelType.FULL =>
+          isSingleRow(join.getLeft) || isSingleRow(join.getRight)
+        case JoinRelType.LEFT => isSingleRow(join.getRight)
+        case JoinRelType.RIGHT => isSingleRow(join.getLeft)
+        case JoinRelType.SEMI | JoinRelType.ANTI => isSingleRow(join.getRight)
+        case _ => false
+      }
     }
+
   }
 
   /**
