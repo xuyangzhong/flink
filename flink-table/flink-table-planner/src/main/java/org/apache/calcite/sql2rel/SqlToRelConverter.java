@@ -46,8 +46,6 @@ import org.apache.calcite.prepare.RelOptTableImpl;
 import org.apache.calcite.rel.RelCollation;
 import org.apache.calcite.rel.RelCollationTraitDef;
 import org.apache.calcite.rel.RelCollations;
-import org.apache.calcite.rel.RelDistribution;
-import org.apache.calcite.rel.RelDistributions;
 import org.apache.calcite.rel.RelFieldCollation;
 import org.apache.calcite.rel.RelNode;
 import org.apache.calcite.rel.RelRoot;
@@ -236,12 +234,13 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * <p>FLINK modifications are at lines
  *
  * <ol>
- *   <li>Added in FLINK-29081, FLINK-28682, FLINK-33395: Lines 654 ~ 671
- *   <li>Added in FLINK-28682: Lines 2294 ~ 2311
- *   <li>Added in FLINK-28682: Lines 2348 ~ 2376
- *   <li>Added in FLINK-20873: Lines 5489 ~ 5498
- *   <li>Added in FLINK-32474: Lines 2846 ~ 2858
- *   <li>Added in FLINK-32474: Lines 2958 ~ 2992
+ *   <li>Added in FLINK-29081, FLINK-28682, FLINK-33395: Lines 653 ~ 670
+ *   <li>Added in Flink-24024: Lines 1434 ~ 1444, Lines 1458 ~ 1500
+ *   <li>Added in FLINK-28682: Lines 2322 ~ 2339
+ *   <li>Added in FLINK-28682: Lines 2376 ~ 2404
+ *   <li>Added in FLINK-32474: Lines 2874 ~ 2886
+ *   <li>Added in FLINK-32474: Lines 2986 ~ 3020
+ *   <li>Added in FLINK-20873: Lines 5522 ~ 5531
  * </ol>
  */
 @SuppressWarnings("UnstableApiUsage")
@@ -1432,9 +1431,17 @@ public class SqlToRelConverter {
                 bb.cursors.add(converted.r);
                 return;
             case SET_SEMANTICS_TABLE:
-                if (!config.isExpand()) {
-                    return;
-                }
+                // ----- FLINK MODIFICATION BEGIN -----
+                // For two reasons, we always expand SET SEMANTICS TABLE
+                // 1. Calcite has a bug when not expanding the SET SEMANTICS TABLE. See more in
+                // CALCITE-6204.
+                // 2. Currently, Flink’s built-in Session Window TVF is the only SET SEMANTICS
+                // TABLE. We will expand it by default like other built-in window TVFs to reuse some
+                // subsequent processing logic and optimization logic.
+                // if (!config.isExpand()) {
+                //     return;
+                // }
+                // ----- FLINK MODIFICATION END -----
                 substituteSubQueryOfSetSemanticsInputTable(bb, subQuery);
                 return;
             default:
@@ -1447,30 +1454,52 @@ public class SqlToRelConverter {
         SqlNode query;
         call = (SqlBasicCall) subQuery.node;
         query = call.operand(0);
-        final SqlValidatorScope innerTableScope =
-                (query instanceof SqlSelect) ? validator().getSelectScope((SqlSelect) query) : null;
-        final Blackboard setSemanticsTableBb = createBlackboard(innerTableScope, null, false);
+
+        // FLINK MODIFICATION BEGIN
+
+        // We modified it for two reasons:
+        // 1. In Flink, Exchange nodes should not appear in the logical stage, which will bring
+        // uncertainty to the implementation of plan optimization in the current logical stage.
+        // Instead, Flink will add exchanges based on traits during the physical phase.
+        // 2. Currently, Flink’s built-in Session Window TVF is the only SET SEMANTICS
+        // TABLE. We will convert it into the same plan tree as other Window TVFs. The partition key
+        // and order key will be recorded using a custom RexCall when subsequently converting the
+        // SqlCall of SET SEMANTICS TABLE. See more at
+        // FlinkConvertletTable#convertSetSemanticsWindowTableFunction
+
         final RelNode inputOfSetSemanticsTable =
                 convertQueryRecursive(query, false, null).project();
-        requireNonNull(inputOfSetSemanticsTable, () -> "input RelNode is null for query " + query);
-        SqlNodeList partitionList = call.operand(1);
-        final ImmutableBitSet partitionKeys =
-                buildPartitionKeys(setSemanticsTableBb, partitionList);
+        relBuilder.push(inputOfSetSemanticsTable);
+
+        // final SqlValidatorScope innerTableScope =
+        //        (query instanceof SqlSelect) ? validator().getSelectScope((SqlSelect) query) :
+        // null;
+        // final Blackboard setSemanticsTableBb = createBlackboard(innerTableScope, null, false);
+        // final RelNode inputOfSetSemanticsTable =
+        //         convertQueryRecursive(query, false, null).project();
+        // relBuilder.push(inputOfSetSemanticsTable);
+        // requireNonNull(inputOfSetSemanticsTable, () -> "input RelNode is null for query " +
+        // query);
+        // SqlNodeList partitionList = call.operand(1);
+        // final ImmutableBitSet partitionKeys =
+        //         buildPartitionKeys(setSemanticsTableBb, partitionList);
         // For set semantics table, distribution is singleton if does not specify
         // partition keys
-        RelDistribution distribution =
-                partitionKeys.isEmpty()
-                        ? RelDistributions.SINGLETON
-                        : RelDistributions.hash(partitionKeys.asList());
+        // RelDistribution distribution =
+        //         partitionKeys.isEmpty()
+        //                 ? RelDistributions.SINGLETON
+        //               : RelDistributions.hash(partitionKeys.asList());
         // ORDER BY
-        final SqlNodeList orderList = call.operand(2);
-        final RelCollation orders = buildCollation(setSemanticsTableBb, orderList);
-        relBuilder.push(inputOfSetSemanticsTable);
-        if (orderList.isEmpty()) {
-            relBuilder.exchange(distribution);
-        } else {
-            relBuilder.sortExchange(distribution, orders);
-        }
+        // final SqlNodeList orderList = call.operand(2);
+        // final RelCollation orders = buildCollation(setSemanticsTableBb, orderList);
+        // if (orderList.isEmpty()) {
+        //     relBuilder.exchange(distribution);
+        // } else {
+        //     relBuilder.sortExchange(distribution, orders);
+        // }
+
+        // FLINK MODIFICATION END
+
         RelNode tableRel = relBuilder.build();
         subQuery.expr = bb.register(tableRel, JoinRelType.LEFT);
         // This is used when converting window table functions:
@@ -5335,6 +5364,11 @@ public class SqlToRelConverter {
                         root = convertQueryRecursive(query, false, null);
                         return RexSubQuery.multiset(root.rel);
 
+                        //                    case SET_SEMANTICS_TABLE:
+                        //                        call = (SqlCall) expr;
+                        //                        query = call.operand(0);
+                        //                        root = convertQueryRecursive(query, false, null);
+                        //                        return RexSubQuery.setSemanticsTable(root.rel);
                     default:
                         break;
                 }
