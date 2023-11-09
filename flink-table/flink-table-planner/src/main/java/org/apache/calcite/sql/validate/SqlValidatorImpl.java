@@ -3730,7 +3730,9 @@ public class SqlValidatorImpl implements SqlValidatorWithHints {
                 // can be another SqlCall, or an SqlIdentifier.
                 checkRollUp(grandParent, parent, stripDot, scope, contextClause);
             } else {
-                List<? extends @Nullable SqlNode> children = ((SqlCall) stripDot).getOperandList();
+                SqlCall call = (SqlCall) stripDot;
+                List<? extends @Nullable SqlNode> children =
+                        new SqlCallBinding(this, scope, call).operands();
                 for (SqlNode child : children) {
                     checkRollUp(parent, current, child, scope, contextClause);
                 }

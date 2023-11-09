@@ -30,12 +30,14 @@ import org.apache.flink.table.types.inference.TypeInferenceUtil;
 import org.apache.flink.table.types.logical.LogicalType;
 
 import org.apache.calcite.rel.type.RelDataType;
+import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.SqlCallBinding;
 import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperandCountRange;
 import org.apache.calcite.sql.SqlOperator;
 import org.apache.calcite.sql.fun.SqlStdOperatorTable;
 import org.apache.calcite.sql.parser.SqlParserPos;
+import org.apache.calcite.sql.type.SqlOperandMetadata;
 import org.apache.calcite.sql.type.SqlOperandTypeChecker;
 import org.apache.calcite.sql.type.SqlTypeUtil;
 import org.apache.calcite.sql.validate.SqlValidator;
@@ -57,7 +59,8 @@ import static org.apache.flink.table.types.logical.utils.LogicalTypeCasts.suppor
  * <p>Note: This class must be kept in sync with {@link TypeInferenceUtil}.
  */
 @Internal
-public final class TypeInferenceOperandChecker implements SqlOperandTypeChecker {
+public final class TypeInferenceOperandChecker
+        implements SqlOperandTypeChecker, SqlOperandMetadata {
 
     private final DataTypeFactory dataTypeFactory;
 
@@ -112,6 +115,24 @@ public final class TypeInferenceOperandChecker implements SqlOperandTypeChecker 
     @Override
     public boolean isOptional(int i) {
         return false;
+    }
+
+    @Override
+    public List<RelDataType> paramTypes(RelDataTypeFactory typeFactory) {
+        throw new IllegalStateException("Should not be called");
+    }
+
+    @Override
+    public List<String> paramNames() {
+        return typeInference
+                .getNamedArguments()
+                .orElseThrow(
+                        () ->
+                                new ValidationException(
+                                        "Could not find the argument names. "
+                                                + "Currently named arguments are not supported "
+                                                + "for varArgs and multi different argument names "
+                                                + "with overload function"));
     }
 
     // --------------------------------------------------------------------------------------------

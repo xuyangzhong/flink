@@ -133,9 +133,17 @@ public class SqlProcedureCallConverter implements SqlNodeConverter<SqlNode> {
                         context.getSqlValidator().getTypeFactory());
         List<RexNode> rexNodes = new ArrayList<>();
         for (int i = 0; i < sqlCall.operandCount(); i++) {
-            RexNode rexNode = context.toRexNode(sqlCall.operand(i), inputRowType, null);
+            RexNode rexNode =
+                    context.toRexNode(unwrapNamedArgs(sqlCall.operand(i)), inputRowType, null);
             rexNodes.add(rexNode);
         }
         return context.reduceRexNodes(rexNodes);
+    }
+
+    private SqlNode unwrapNamedArgs(SqlNode sqlNode) {
+        if (sqlNode instanceof SqlCall && sqlNode.getKind() == SqlKind.ARGUMENT_ASSIGNMENT) {
+            return ((SqlCall) sqlNode).operand(0);
+        }
+        return sqlNode;
     }
 }

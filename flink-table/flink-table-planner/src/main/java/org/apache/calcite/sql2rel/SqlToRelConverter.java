@@ -6051,7 +6051,8 @@ public class SqlToRelConverter {
             try {
                 // switch out of agg mode
                 bb.agg = null;
-                for (SqlNode operand : call.getOperandList()) {
+                for (SqlNode operand :
+                        new SqlCallBinding(validator(), aggregatingSelectScope, call).operands()) {
 
                     // special case for COUNT(*):  delete the *
                     if (operand instanceof SqlIdentifier) {

@@ -1052,6 +1052,92 @@ public class FunctionITCase extends StreamingTestBase {
     }
 
     @Test
+    public void testNamedArgumentsCatalogTableFunction() throws Exception {
+        final Row[] sinkData =
+                new Row[] {Row.of("Test is a string"), Row.of("42"), Row.of((String) null)};
+
+        TestCollectionTableFactory.reset();
+
+        tEnv().executeSql("CREATE TABLE SinkTable(s STRING) WITH ('connector' = 'COLLECTION')");
+
+        tEnv().createFunction("NamedArgumentsTableFunction", NamedArgumentsTableFunction.class);
+        tEnv().executeSql(
+                        "INSERT INTO SinkTable "
+                                + "SELECT T1.s FROM TABLE(NamedArgumentsTableFunction(in2 => 'str2', in1 => 'str1')) AS T1(s) "
+                                + "UNION ALL "
+                                + "SELECT CAST(T2.i AS STRING) FROM TABLE(NamedArgumentsTableFunction(in2 => 42, in1 => 99)) AS T2(i)")
+                .await();
+
+        assertThat(TestCollectionTableFactory.getResult()).containsExactlyInAnyOrder(sinkData);
+    }
+
+    @Test
+    public void testNamedArgumentsScalarFunction() throws Exception {
+        final List<Row> sourceData =
+                Arrays.asList(
+                        Row.of(1, 2, "str1", "str11"),
+                        Row.of(3, 4, "str2", "str22"),
+                        Row.of(5, 6, "str3", "str33"));
+
+        final List<Row> sinkData =
+                Arrays.asList(
+                        Row.of(0, 0, "1: 2", "str1: str11"),
+                        Row.of(0, 0, "3: 4", "str2: str22"),
+                        Row.of(0, 0, "5: 6", "str3: str33"));
+
+        TestCollectionTableFactory.reset();
+        TestCollectionTableFactory.initData(sourceData);
+
+        tEnv().executeSql(
+                        "CREATE TABLE TestTable(i1 INT NOT NULL, i2 INT NOT NULL, s1 STRING, s2 STRING) WITH ('connector' = 'COLLECTION')");
+
+        tEnv().createTemporarySystemFunction(
+                        "NamedArgumentsScalarFunction", NamedArgumentsScalarFunction.class);
+        tEnv().executeSql(
+                        "INSERT INTO TestTable SELECT"
+                                + " 0 as i1, 0 as i2,"
+                                + " NamedArgumentsScalarFunction(in2 => i2, in1 => i1) as s1,"
+                                + " NamedArgumentsScalarFunction(in2 => s2, in1 => s1) as s2 FROM TestTable")
+                .await();
+
+        assertThat(TestCollectionTableFactory.getResult()).isEqualTo(sinkData);
+    }
+
+    @Test
+    public void testNamedArgumentAggregateFunction() throws Exception {
+        final List<Row> sourceData =
+                Arrays.asList(
+                        Row.of(LocalDateTime.parse("2007-12-03T10:15:30"), "a", "b", 1, 2),
+                        Row.of(LocalDateTime.parse("2007-12-03T10:15:30"), "c", "d", 33, 44),
+                        Row.of(LocalDateTime.parse("2007-12-03T10:15:32"), "e", "f", 5, 6),
+                        Row.of(LocalDateTime.parse("2007-12-03T10:15:32"), "gg", "hh", 7, 88));
+
+        final List<Row> sinkData = Arrays.asList(Row.of("a:b", "33:44"), Row.of("gg:hh", "7:88"));
+
+        TestCollectionTableFactory.reset();
+        TestCollectionTableFactory.initData(sourceData);
+
+        tEnv().executeSql(
+                        "CREATE TABLE SourceTable(ts TIMESTAMP(3), s1 STRING, s2 STRING, i1 INT, i2 INT, WATERMARK FOR ts AS ts - INTERVAL '1' SECOND) "
+                                + "WITH ('connector' = 'COLLECTION')");
+        tEnv().executeSql(
+                        "CREATE TABLE SinkTable(s1 STRING, s2 STRING) WITH ('connector' = 'COLLECTION')");
+
+        tEnv().createTemporarySystemFunction(
+                        "NamedArgumentAggregateFunction", NamedArgumentAggregateFunction.class);
+
+        tEnv().executeSql(
+                        "INSERT INTO SinkTable "
+                                + "SELECT NamedArgumentAggregateFunction(in2 => s2, in1 => s1), "
+                                + "NamedArgumentAggregateFunction(in2 => i2, in1 => i1) "
+                                + "FROM SourceTable "
+                                + "GROUP BY TUMBLE(ts, INTERVAL '1' SECOND)")
+                .await();
+
+        assertThat(TestCollectionTableFactory.getResult()).isEqualTo(sinkData);
+    }
+
+    @Test
     public void testInvalidUseOfScalarFunction() {
         tEnv().executeSql(
                         "CREATE TABLE SinkTable(s BIGINT NOT NULL) WITH ('connector' = 'COLLECTION')");
@@ -1412,6 +1498,25 @@ public class FunctionITCase extends StreamingTestBase {
     }
 
     /** Function that is overloaded and takes use of annotations. */
+    public static class NamedArgumentsScalarFunction extends ScalarFunction {
+        @FunctionHint(
+                input = {@DataTypeHint("STRING"), @DataTypeHint("STRING")},
+                output = @DataTypeHint("STRING"),
+                argumentNames = {"in1", "in2"})
+        public String eval(String arg1, String arg2) {
+            return (arg1 + ": " + arg2);
+        }
+
+        @FunctionHint(
+                input = {@DataTypeHint("INT"), @DataTypeHint("INT")},
+                output = @DataTypeHint("STRING"),
+                argumentNames = {"in1", "in2"})
+        public String eval(Integer arg1, Integer arg2) {
+            return (arg1 + ": " + arg2);
+        }
+    }
+
+    /** Function that is overloaded and takes use of annotations. */
     public static class ComplexScalarFunction extends ScalarFunction {
         public String eval(
                 @DataTypeHint(inputGroup = InputGroup.ANY) Object o, java.sql.Timestamp t) {
@@ -1527,6 +1632,25 @@ public class FunctionITCase extends StreamingTestBase {
         }
     }
 
+    /** Function that returns a string or integer. */
+    public static class NamedArgumentsTableFunction extends TableFunction<Object> {
+        @FunctionHint(
+                input = {@DataTypeHint("STRING"), @DataTypeHint("STRING")},
+                output = @DataTypeHint("STRING"),
+                argumentNames = {"in1", "in2"})
+        public void eval(String arg1, String arg2) {
+            collect(arg1 + ", " + arg2);
+        }
+
+        @FunctionHint(
+                input = {@DataTypeHint("INT"), @DataTypeHint("INT")},
+                output = @DataTypeHint("STRING"),
+                argumentNames = {"in1", "in2"})
+        public void eval(Integer arg1, Integer arg2) {
+            collect(arg1 + ", " + arg2);
+        }
+    }
+
     /**
      * Function that returns which method has been called.
      *
@@ -1629,6 +1753,52 @@ public class FunctionITCase extends StreamingTestBase {
             if (value == null) {
                 return;
             }
+            final String longestString = (String) acc.getField(0);
+            if (longestString == null || longestString.length() < value.length()) {
+                acc.setField(0, value);
+            }
+        }
+
+        @Override
+        public String getValue(Row acc) {
+            return (String) acc.getField(0);
+        }
+    }
+
+    /** Function that aggregates strings and finds the longest string. */
+    public static class NamedArgumentAggregateFunction extends AggregateFunction<String, Row> {
+
+        @Override
+        public Row createAccumulator() {
+            return Row.of((String) null);
+        }
+
+        @FunctionHint(
+                input = {@DataTypeHint("STRING"), @DataTypeHint("STRING")},
+                output = @DataTypeHint("STRING"),
+                argumentNames = {"in1", "in2"},
+                accumulator = @DataTypeHint("ROW<longestString STRING>"))
+        public void accumulate(Row acc, String arg1, String arg2) {
+            if (arg1 == null || arg2 == null) {
+                return;
+            }
+            String value = arg1 + ":" + arg2;
+            final String longestString = (String) acc.getField(0);
+            if (longestString == null || longestString.length() < value.length()) {
+                acc.setField(0, value);
+            }
+        }
+
+        @FunctionHint(
+                input = {@DataTypeHint("INT"), @DataTypeHint("INT")},
+                output = @DataTypeHint("STRING"),
+                argumentNames = {"in1", "in2"},
+                accumulator = @DataTypeHint("ROW<longestString STRING>"))
+        public void accumulate(Row acc, Integer arg1, Integer arg2) {
+            if (arg1 == null || arg2 == null) {
+                return;
+            }
+            String value = arg1 + ":" + arg2;
             final String longestString = (String) acc.getField(0);
             if (longestString == null || longestString.length() < value.length()) {
                 acc.setField(0, value);
