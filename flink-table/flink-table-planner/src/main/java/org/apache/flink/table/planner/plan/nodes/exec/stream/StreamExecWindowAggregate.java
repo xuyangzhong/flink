@@ -163,6 +163,7 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
 
         // Hopping window requires additional COUNT(*) to determine whether to register next timer
         // through whether the current fired window is empty, see SliceSharedWindowAggProcessor.
+        // FIXME should set 'needInputCount' to true if consuming CDC stream
         final AggregateInfoList aggInfoList =
                 AggregateUtil.deriveStreamWindowAggregateInfoList(
                         planner.getTypeFactory(),
@@ -230,6 +231,7 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                                 relBuilder,
                                 JavaScalaConversionUtil.toScala(fieldTypes),
                                 false) // copyInputField
+                        .needRetract()
                         .needAccumulate();
 
         if (sliceAssigner instanceof SliceSharedAssigner) {

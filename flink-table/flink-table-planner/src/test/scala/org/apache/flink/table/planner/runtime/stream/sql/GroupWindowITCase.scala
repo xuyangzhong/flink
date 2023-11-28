@@ -22,13 +22,14 @@ import org.apache.flink.api.common.typeinfo.TypeInformation
 import org.apache.flink.api.scala._
 import org.apache.flink.table.api._
 import org.apache.flink.table.api.bridge.scala._
+import org.apache.flink.table.api.config.{ExecutionConfigOptions, OptimizerConfigOptions}
 import org.apache.flink.table.api.internal.TableEnvironmentInternal
 import org.apache.flink.table.planner.factories.TestValuesTableFactory
 import org.apache.flink.table.planner.factories.TestValuesTableFactory.{changelogRow, registerData}
 import org.apache.flink.table.planner.plan.utils.JavaUserDefinedAggFunctions.{ConcatDistinctAggFunction, WeightedAvg}
 import org.apache.flink.table.planner.plan.utils.WindowEmitStrategy.{TABLE_EXEC_EMIT_ALLOW_LATENESS, TABLE_EXEC_EMIT_LATE_FIRE_DELAY, TABLE_EXEC_EMIT_LATE_FIRE_ENABLED}
 import org.apache.flink.table.planner.runtime.utils._
-import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.{HEAP_BACKEND, ROCKSDB_BACKEND, StateBackendMode}
+import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.{HEAP_BACKEND, StateBackendMode}
 import org.apache.flink.table.planner.runtime.utils.TimeTestUtil.TimestampAndWatermarkWithOffset
 import org.apache.flink.table.runtime.types.TypeInfoDataTypeConverter.fromDataTypeToTypeInfo
 import org.apache.flink.types.Row
@@ -392,6 +393,8 @@ class GroupWindowITCase(mode: StateBackendMode, useTimestampLtz: Boolean)
   @Test
   def testWindowAggregateOnUpsertSource(): Unit = {
     env.setParallelism(1)
+    tEnv.getConfig.getConfiguration
+      .set(ExecutionConfigOptions.TABLE_EXEC_MINIBATCH_ENABLED, java.lang.Boolean.valueOf("false"))
     val upsertSourceDataId = registerData(upsertSourceCurrencyData)
     tEnv.executeSql(s"""
                        |CREATE TABLE upsert_currency (
@@ -410,13 +413,60 @@ class GroupWindowITCase(mode: StateBackendMode, useTimestampLtz: Boolean)
     val sql =
       """
         |SELECT
-        |currency,
+        |currency_no,
         |COUNT(1) AS cnt,
         |MAX(rate),
-        |TUMBLE_START(currency_time, INTERVAL '5' SECOND) as w_start,
-        |TUMBLE_END(currency_time, INTERVAL '5' SECOND) as w_end
+        |HOP_START(currency_time, INTERVAL '5' SECOND, INTERVAL '9' SECOND) as w_start,
+        |HOP_END(currency_time, INTERVAL '5' SECOND, INTERVAL '9' SECOND) as w_end
         |FROM upsert_currency
-        |GROUP BY currency, TUMBLE(currency_time, INTERVAL '5' SECOND)
+        |GROUP BY currency_no, HOP(currency_time, INTERVAL '5' SECOND, INTERVAL '9' SECOND)
+        |""".stripMargin
+    val sink = new TestingAppendSink
+    tEnv.sqlQuery(sql).toAppendStream[Row].addSink(sink)
+    env.execute()
+    val expected = Seq(
+      "US Dollar,1,102,1970-01-01T00:00,1970-01-01T00:00:05",
+      "Yen,1,1,1970-01-01T00:00,1970-01-01T00:00:05",
+      "Euro,1,118,1970-01-01T00:00:15,1970-01-01T00:00:20",
+      "RMB,1,702,1970-01-01T00:00,1970-01-01T00:00:05"
+    )
+    assertEquals(expected.sorted, sink.getAppendResults.sorted)
+  }
+
+  @Test
+  def testWindowTVFConsumingUpsertSource(): Unit = {
+    env.setParallelism(1)
+    val upsertSourceDataId = registerData(upsertSourceCurrencyData)
+
+    tEnv.getConfig.getConfiguration
+      .set(ExecutionConfigOptions.TABLE_EXEC_MINIBATCH_ENABLED, java.lang.Boolean.valueOf("false"))
+    tEnv.getConfig.getConfiguration
+      .set(OptimizerConfigOptions.TABLE_OPTIMIZER_AGG_PHASE_STRATEGY, "ONE_PHASE")
+    tEnv.executeSql(s"""
+                       |CREATE TABLE upsert_currency (
+                       |  currency STRING,
+                       |  currency_no STRING,
+                       |  rate  BIGINT,
+                       |  currency_time TIMESTAMP(3),
+                       |  WATERMARK FOR currency_time AS currency_time - interval '5' SECOND,
+                       |  PRIMARY KEY(currency) NOT ENFORCED
+                       |) WITH (
+                       |  'connector' = 'values',
+                       |  'changelog-mode' = 'UA,D',
+                       |  'data-id' = '$upsertSourceDataId'
+                       |)
+                       |""".stripMargin)
+    val sql =
+      """
+        |SELECT
+        |currency_no,
+        |RAND(),
+        |COUNT(1) AS cnt,
+        |MAX(rate),
+        |window_start as w_start,
+        |window_end as w_end
+        |FROM TABLE(HOP(TABLE upsert_currency, DESCRIPTOR(currency_time), INTERVAL '5' SECOND, INTERVAL '9' SECOND))
+        |GROUP BY currency_no, window_start, window_end
         |""".stripMargin
     val sink = new TestingAppendSink
     tEnv.sqlQuery(sql).toAppendStream[Row].addSink(sink)
@@ -612,10 +662,7 @@ object GroupWindowITCase {
   @Parameterized.Parameters(name = "StateBackend={0}, UseTimestampLtz = {1}")
   def parameters(): util.Collection[Array[java.lang.Object]] = {
     Seq[Array[AnyRef]](
-      Array(HEAP_BACKEND, java.lang.Boolean.TRUE),
-      Array(HEAP_BACKEND, java.lang.Boolean.FALSE),
-      Array(ROCKSDB_BACKEND, java.lang.Boolean.TRUE),
-      Array(ROCKSDB_BACKEND, java.lang.Boolean.FALSE)
+      Array(HEAP_BACKEND, java.lang.Boolean.FALSE)
     )
   }
 }

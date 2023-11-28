@@ -257,6 +257,7 @@ public final class SlicingWindowOperator<K, W> extends TableStreamOperator<RowDa
     private void onTimer(InternalTimer<K, W> timer) throws Exception {
         setCurrentKey(timer.getKey());
         W window = timer.getNamespace();
+        // FIXME should not output data if the window has no data after retraction
         windowProcessor.fireWindow(window);
         windowProcessor.clearWindow(window);
         // we don't need to clear window timers,

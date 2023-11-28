@@ -219,8 +219,16 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
         val providedTrait = new ModifyKindSetTrait(builder.build())
         createNewNode(window, children, providedTrait, requiredTrait, requester)
 
-      case _: StreamPhysicalWindowAggregate | _: StreamPhysicalWindowRank |
-          _: StreamPhysicalWindowDeduplicate =>
+      case window: StreamPhysicalWindowAggregate =>
+        // WindowAggregate and WindowTableAggregate support all changes in input
+        val children = visitChildren(window, ModifyKindSetTrait.ALL_CHANGES)
+        val builder = ModifyKindSet
+          .newBuilder()
+          .addContainedKind(ModifyKind.INSERT)
+        val providedTrait = new ModifyKindSetTrait(builder.build())
+        createNewNode(window, children, providedTrait, requiredTrait, requester)
+
+      case _: StreamPhysicalWindowRank | _: StreamPhysicalWindowDeduplicate =>
         // WindowAggregate, WindowRank, WindowDeduplicate support insert-only in input
         val children = visitChildren(rel, ModifyKindSetTrait.INSERT_ONLY)
         val providedTrait = ModifyKindSetTrait.INSERT_ONLY
@@ -474,8 +482,8 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
 
         case _: StreamPhysicalGroupAggregate | _: StreamPhysicalGroupTableAggregate |
             _: StreamPhysicalLimit | _: StreamPhysicalPythonGroupAggregate |
-            _: StreamPhysicalPythonGroupTableAggregate |
-            _: StreamPhysicalGroupWindowAggregateBase =>
+            _: StreamPhysicalPythonGroupTableAggregate | _: StreamPhysicalGroupWindowAggregateBase |
+            _: StreamPhysicalWindowAggregate =>
           // Aggregate, TableAggregate, Limit and GroupWindowAggregate requires update_before if
           // there are updates
           val requiredChildTrait = beforeAfterOrNone(getModifyKindSet(rel.getInput(0)))
@@ -483,9 +491,8 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
           // use requiredTrait as providedTrait, because they should support all kinds of UpdateKind
           createNewNode(rel, children, requiredTrait)
 
-        case _: StreamPhysicalWindowAggregate | _: StreamPhysicalWindowRank |
-            _: StreamPhysicalWindowDeduplicate | _: StreamPhysicalDeduplicate |
-            _: StreamPhysicalTemporalSort | _: StreamPhysicalMatch |
+        case _: StreamPhysicalWindowRank | _: StreamPhysicalWindowDeduplicate |
+            _: StreamPhysicalDeduplicate | _: StreamPhysicalTemporalSort | _: StreamPhysicalMatch |
             _: StreamPhysicalOverAggregate | _: StreamPhysicalIntervalJoin |
             _: StreamPhysicalPythonOverAggregate | _: StreamPhysicalWindowJoin =>
           // WindowAggregate, WindowTableAggregate, WindowRank, WindowDeduplicate, Deduplicate,

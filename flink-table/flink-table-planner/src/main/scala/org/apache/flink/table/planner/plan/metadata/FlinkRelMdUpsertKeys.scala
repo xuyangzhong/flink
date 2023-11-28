@@ -22,7 +22,7 @@ import org.apache.flink.table.planner.plan.metadata.FlinkMetadata.UpsertKeys
 import org.apache.flink.table.planner.plan.nodes.calcite.{Expand, Rank, WatermarkAssigner, WindowAggregate}
 import org.apache.flink.table.planner.plan.nodes.physical.batch.{BatchPhysicalGroupAggregateBase, BatchPhysicalOverAggregate, BatchPhysicalWindowAggregateBase}
 import org.apache.flink.table.planner.plan.nodes.physical.common.CommonPhysicalLookupJoin
-import org.apache.flink.table.planner.plan.nodes.physical.stream.{StreamPhysicalChangelogNormalize, StreamPhysicalDeduplicate, StreamPhysicalDropUpdateBefore, StreamPhysicalGlobalGroupAggregate, StreamPhysicalGroupAggregate, StreamPhysicalGroupWindowAggregate, StreamPhysicalIntervalJoin, StreamPhysicalLocalGroupAggregate, StreamPhysicalOverAggregate}
+import org.apache.flink.table.planner.plan.nodes.physical.stream._
 import org.apache.flink.table.planner.plan.schema.IntermediateRelTable
 import org.apache.flink.table.planner.plan.utils.FlinkRexUtil
 
@@ -30,7 +30,7 @@ import com.google.common.collect.ImmutableSet
 import org.apache.calcite.plan.hep.HepRelVertex
 import org.apache.calcite.plan.volcano.RelSubset
 import org.apache.calcite.rel.{RelDistribution, RelNode, SingleRel}
-import org.apache.calcite.rel.core.{Aggregate, Calc, Exchange, Filter, Join, JoinInfo, JoinRelType, Project, SetOp, Sort, TableScan, Window}
+import org.apache.calcite.rel.core._
 import org.apache.calcite.rel.metadata._
 import org.apache.calcite.rex.{RexNode, RexUtil}
 import org.apache.calcite.util.{Bug, ImmutableBitSet, Util}
@@ -172,6 +172,15 @@ class FlinkRelMdUpsertKeys private extends MetadataHandler[UpsertKeys] {
 
   def getUpsertKeys(
       rel: StreamPhysicalGroupWindowAggregate,
+      mq: RelMetadataQuery): util.Set[ImmutableBitSet] = {
+    FlinkRelMdUniqueKeys.INSTANCE.getUniqueKeysOnWindowAgg(
+      rel.getRowType.getFieldCount,
+      rel.namedWindowProperties,
+      rel.grouping)
+  }
+
+  def getUpsertKeys(
+      rel: StreamPhysicalWindowAggregate,
       mq: RelMetadataQuery): util.Set[ImmutableBitSet] = {
     FlinkRelMdUniqueKeys.INSTANCE.getUniqueKeysOnWindowAgg(
       rel.getRowType.getFieldCount,

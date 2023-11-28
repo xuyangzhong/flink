@@ -18,9 +18,13 @@
 
 package org.apache.flink.table.planner.plan.nodes.exec.stream;
 
+import org.apache.calcite.rel.core.AggregateCall;
+import org.apache.calcite.tools.RelBuilder;
 import org.apache.flink.FlinkVersion;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.ReadableConfig;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
+import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.table.data.RowData;
@@ -28,12 +32,7 @@ import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.agg.AggsHandlerCodeGenerator;
 import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.logical.WindowingStrategy;
-import org.apache.flink.table.planner.plan.nodes.exec.ExecEdge;
-import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
-import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeConfig;
-import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeContext;
-import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeMetadata;
-import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
+import org.apache.flink.table.planner.plan.nodes.exec.*;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
 import org.apache.flink.table.planner.plan.utils.AggregateInfoList;
 import org.apache.flink.table.planner.plan.utils.AggregateUtil;
@@ -54,12 +53,6 @@ import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.runtime.util.TimeWindowUtil;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
-import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
-
-import org.apache.calcite.rel.core.AggregateCall;
-import org.apache.calcite.tools.RelBuilder;
 
 import java.time.ZoneId;
 import java.util.Arrays;
@@ -208,7 +201,8 @@ public class StreamExecLocalWindowAggregate extends StreamExecWindowAggregateBas
                                 JavaScalaConversionUtil.toScala(fieldTypes),
                                 true) // copyInputField
                         .needAccumulate()
-                        .needMerge(0, true, null);
+                        .needMerge(0, true, null)
+                        .needRetract();
 
         return generator.generateNamespaceAggsHandler(
                 "LocalWindowAggsHandler",
