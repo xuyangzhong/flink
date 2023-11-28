@@ -136,3 +136,21 @@ case class SessionGroupWindow(
 
   override def toString: String = s"SessionGroupWindow($alias, $timeField, $gap)"
 }
+
+case class CumulateGroupWindow(
+    alias: WindowReference,
+    timeField: FieldReferenceExpression,
+    size: ValueLiteralExpression,
+    step: ValueLiteralExpression)
+  extends LogicalWindow(alias, timeField) {
+  override def equals(o: Any): Boolean = {
+    if (super.equals(o)) {
+      isValueLiteralExpressionEqual(size, o.asInstanceOf[CumulateGroupWindow].size) &&
+      isValueLiteralExpressionEqual(step, o.asInstanceOf[CumulateGroupWindow].step)
+    } else {
+      false
+    }
+  }
+
+  override def toString: String = s"CumulateGroupWindow($alias, $timeField, $size, $step)"
+}

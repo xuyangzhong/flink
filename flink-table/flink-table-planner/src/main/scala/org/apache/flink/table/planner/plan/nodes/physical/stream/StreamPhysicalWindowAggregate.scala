@@ -20,9 +20,9 @@ package org.apache.flink.table.planner.plan.nodes.physical.stream
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.plan.logical.WindowingStrategy
 import org.apache.flink.table.planner.plan.nodes.exec.{ExecNode, InputProperty}
-import org.apache.flink.table.planner.plan.nodes.exec.stream.StreamExecWindowAggregate
+import org.apache.flink.table.planner.plan.nodes.exec.stream.{StreamExecGroupWindowAggregate, StreamExecWindowAggregate}
 import org.apache.flink.table.planner.plan.utils._
-import org.apache.flink.table.planner.plan.utils.WindowUtil.checkEmitConfiguration
+import org.apache.flink.table.planner.plan.utils.WindowEmitStrategy.{TABLE_EXEC_EMIT_EARLY_FIRE_ENABLED, TABLE_EXEC_EMIT_LATE_FIRE_ENABLED}
 import org.apache.flink.table.planner.utils.ShortcutUtils.{unwrapTableConfig, unwrapTypeFactory}
 import org.apache.flink.table.runtime.groupwindow.NamedWindowProperty
 
@@ -109,7 +109,24 @@ class StreamPhysicalWindowAggregate(
   }
 
   override def translateToExecNode(): ExecNode[_] = {
-    checkEmitConfiguration(unwrapTableConfig(this))
+//    checkEmitConfiguration(unwrapTableConfig(this))
+    val needRetraction = !ChangelogPlanUtils.inputInsertOnly(this)
+    val tableConfig = unwrapTableConfig(this)
+    if (
+      needRetraction || tableConfig.get(TABLE_EXEC_EMIT_EARLY_FIRE_ENABLED) ||
+      tableConfig.get(TABLE_EXEC_EMIT_LATE_FIRE_ENABLED)
+    ) {
+      new StreamExecGroupWindowAggregate(
+        unwrapTableConfig(this),
+        grouping,
+        aggCalls.toArray,
+        WindowUtil.buildLogicalWindowFromStrategy(windowing, inputRel.getRowType),
+        namedWindowProperties.toArray,
+        true,
+        InputProperty.DEFAULT,
+        FlinkTypeFactory.toLogicalRowType(getRowType),
+        getRelDetailedDescription)
+    }
     new StreamExecWindowAggregate(
       unwrapTableConfig(this),
       grouping,

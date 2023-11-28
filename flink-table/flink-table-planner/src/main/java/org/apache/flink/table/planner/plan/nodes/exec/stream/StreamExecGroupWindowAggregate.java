@@ -30,6 +30,7 @@ import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.EqualiserCodeGenerator;
 import org.apache.flink.table.planner.codegen.agg.AggsHandlerCodeGenerator;
 import org.apache.flink.table.planner.delegation.PlannerBase;
+import org.apache.flink.table.planner.plan.logical.CumulateGroupWindow;
 import org.apache.flink.table.planner.plan.logical.LogicalWindow;
 import org.apache.flink.table.planner.plan.logical.SessionGroupWindow;
 import org.apache.flink.table.planner.plan.logical.SlidingGroupWindow;
@@ -433,6 +434,21 @@ public class StreamExecGroupWindowAggregate extends StreamExecAggregateBase {
                 builder = builder.session(toDuration(gap)).withProcessingTime();
             } else if (isRowtimeAttribute(timeField)) {
                 builder = builder.session(toDuration(gap)).withEventTime(timeFieldIndex);
+            } else {
+                throw new UnsupportedOperationException("This should not happen.");
+            }
+        } else if (window instanceof CumulateGroupWindow) {
+            CumulateGroupWindow cumulateWindow = (CumulateGroupWindow) window;
+            FieldReferenceExpression timeField = cumulateWindow.timeField();
+            ValueLiteralExpression size = cumulateWindow.size();
+            ValueLiteralExpression step = cumulateWindow.step();
+            if (isProctimeAttribute(timeField)) {
+                builder =
+                        builder.cumulative(toDuration(size), toDuration(step)).withProcessingTime();
+            } else if (isRowtimeAttribute(timeField)) {
+                builder =
+                        builder.cumulative(toDuration(size), toDuration(step))
+                                .withEventTime(timeFieldIndex);
             } else {
                 throw new UnsupportedOperationException("This should not happen.");
             }

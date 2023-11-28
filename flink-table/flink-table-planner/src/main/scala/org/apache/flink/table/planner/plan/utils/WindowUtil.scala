@@ -18,8 +18,11 @@
 package org.apache.flink.table.planner.plan.utils
 
 import org.apache.flink.table.api.{DataTypes, TableConfig, TableException, ValidationException}
+import org.apache.flink.table.expressions.ApiExpressionUtils.intervalOfMillis
+import org.apache.flink.table.expressions.FieldReferenceExpression
 import org.apache.flink.table.planner.JBigDecimal
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
+import org.apache.flink.table.planner.calcite.FlinkTypeFactory.toLogicalType
 import org.apache.flink.table.planner.functions.sql.{FlinkSqlOperatorTable, SqlWindowTableFunction}
 import org.apache.flink.table.planner.plan.`trait`.RelWindowProperties
 import org.apache.flink.table.planner.plan.logical._
@@ -32,6 +35,7 @@ import org.apache.flink.table.runtime.groupwindow._
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromDataTypeToLogicalType
 import org.apache.flink.table.types.logical.TimestampType
 import org.apache.flink.table.types.logical.utils.LogicalTypeChecks.canBeTimeAttributeType
+import org.apache.flink.table.types.utils.TypeConversions
 
 import org.apache.calcite.plan.volcano.RelSubset
 import org.apache.calcite.rel.`type`.RelDataType
@@ -391,5 +395,57 @@ object WindowUtil {
       case _: Util.FoundOne => return true
     }
     false
+  }
+
+  /**
+   * Building a [[LogicalWindow]] which is used to construct a [[StreamExecGroupWindowAggregate]]
+   * from the given [[WindowingStrategy]].
+   */
+  def buildLogicalWindowFromStrategy(
+      windowingStrategy: WindowingStrategy,
+      inputType: RelDataType): LogicalWindow = windowingStrategy match {
+    case wStrategy: TimeAttributeWindowingStrategy =>
+      // build window time field reference
+      val timeAttributeIdx = wStrategy.getTimeAttributeIndex
+      val fieldName = inputType.getFieldList.get(timeAttributeIdx).getName
+      val fieldType = inputType.getFieldList.get(timeAttributeIdx).getType
+      val timeFieldRef = new FieldReferenceExpression(
+        fieldName,
+        TypeConversions.fromLogicalToDataType(toLogicalType(fieldType)),
+        0,
+        timeAttributeIdx)
+
+      // build window reference
+      val windowRef = new WindowReference("w$", wStrategy.getTimeAttributeType)
+
+      // build logical window
+      val windowSpec = wStrategy.getWindow
+      windowSpec match {
+        case tumble: TumblingWindowSpec =>
+          val interval = tumble.getSize.toMillis
+          TumblingGroupWindow(windowRef, timeFieldRef, intervalOfMillis(interval))
+        case hop: HoppingWindowSpec =>
+          val slide = hop.getSlide.toMillis
+          val size = hop.getSize.toMillis
+          SlidingGroupWindow(
+            windowRef,
+            timeFieldRef,
+            intervalOfMillis(size),
+            intervalOfMillis(slide))
+        case cumulate: CumulativeWindowSpec =>
+          val size = cumulate.getMaxSize.toMillis
+          val step = cumulate.getStep.toMillis
+          CumulateGroupWindow(
+            windowRef,
+            timeFieldRef,
+            intervalOfMillis(size),
+            intervalOfMillis(step))
+        case _ => throw new TableException("Not supported window type: " + windowSpec)
+      }
+    case _ =>
+      throw new TableException(
+        String.format(
+          "Can not transform to old window operator, window strategy: %s",
+          windowingStrategy))
   }
 }
