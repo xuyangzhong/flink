@@ -32,10 +32,10 @@ import org.apache.flink.table.planner.expressions.DeclarativeExpressionResolver.
 import org.apache.flink.table.planner.functions.utils.UserDefinedFunctionUtils
 import org.apache.flink.table.planner.plan.utils.AggregateInfoList
 import org.apache.flink.table.planner.utils.JavaScalaConversionUtil.toScala
-import org.apache.flink.table.runtime.dataview.{DataViewSpec, ListViewSpec, MapViewSpec, StateListView, StateMapView}
+import org.apache.flink.table.runtime.dataview._
 import org.apache.flink.table.runtime.generated._
 import org.apache.flink.table.runtime.groupwindow._
-import org.apache.flink.table.runtime.operators.window.slicing.SliceAssigner
+import org.apache.flink.table.runtime.operators.window.windowtvf.common.WindowAssigner
 import org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromDataTypeToLogicalType
 import org.apache.flink.table.types.DataType
 import org.apache.flink.table.types.logical.{BooleanType, IntType, LogicalType, RowType}
@@ -626,7 +626,7 @@ class AggsHandlerCodeGenerator(
    * Generate [[NamespaceAggsHandleFunction]] with the given function name and aggregate infos and
    * window properties.
    */
-  def generateNamespaceAggsHandler(
+  def generateNamespaceAggsHandler[N](
       name: String,
       aggInfoList: AggregateInfoList,
       windowProperties: Seq[WindowProperty],
@@ -634,8 +634,7 @@ class AggsHandlerCodeGenerator(
       shiftTimeZone: ZoneId): GeneratedNamespaceAggsHandleFunction[JLong] = {
     this.sliceAssignerTerm = newName(ctx, "sliceAssigner")
     ctx.addReusableObjectWithName(sliceAssigner, sliceAssignerTerm)
-    // we use window end timestamp to indicate a window, see SliceAssigner
-    generateNamespaceAggsHandler(name, aggInfoList, windowProperties, classOf[JLong], shiftTimeZone)
+    generateNamespaceAggsHandler(name, aggInfoList, windowProperties, windowClass, shiftTimeZone)
   }
 
   /**
