@@ -30,8 +30,6 @@ import java.io.Serializable;
  * GROUP WINDOW FUNCTION syntax. In the long future, {@link GroupWindowAssigner} will be dropped.
  *
  * <p>See more details in {@link AbstractWindowOperator}.
- *
- * <p>TODO support UnsliceAssigner.
  */
 public interface WindowAssigner extends Serializable {
 

@@ -46,6 +46,7 @@ import org.apache.flink.table.runtime.groupwindow.NamedWindowProperty;
 import org.apache.flink.table.runtime.groupwindow.WindowProperty;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.operators.aggregate.window.builder.SlicingWindowAggOperatorBuilder;
+import org.apache.flink.table.runtime.operators.window.windowtvf.common.WindowAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceAssigner;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.runtime.typeutils.PagedTypeSerializer;
@@ -70,6 +71,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.Preconditions.checkState;
 
 /** Stream {@link ExecNode} for window table-valued based global aggregate. */
 @ExecNodeMetadata(
@@ -169,7 +171,11 @@ public class StreamExecGlobalWindowAggregate extends StreamExecWindowAggregateBa
                 TimeWindowUtil.getShiftTimeZone(
                         windowing.getTimeAttributeType(),
                         TableConfigUtils.getLocalTimeZone(config));
-        final SliceAssigner sliceAssigner = createSliceAssigner(windowing, shiftTimeZone);
+        final WindowAssigner windowAssigner = createWindowAssigner(windowing, shiftTimeZone);
+        checkState(
+                windowAssigner instanceof SliceAssigner,
+                "Two-stage optimization on unslicing window like SESSION are not supported yet");
+        final SliceAssigner sliceAssigner = (SliceAssigner) windowAssigner;
 
         final AggregateInfoList localAggInfoList =
                 AggregateUtil.deriveStreamWindowAggregateInfoList(

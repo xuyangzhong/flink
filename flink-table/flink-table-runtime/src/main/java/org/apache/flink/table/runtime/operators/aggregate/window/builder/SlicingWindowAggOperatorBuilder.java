@@ -28,13 +28,10 @@ import org.apache.flink.table.runtime.operators.aggregate.window.processors.Slic
 import org.apache.flink.table.runtime.operators.window.windowtvf.combines.RecordsCombiner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.common.AbstractWindowOperator;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceAssigner;
-import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceAssigners.HoppingSliceAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceSharedAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceUnsharedAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SlicingWindowOperator;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SlicingWindowProcessor;
-
-import java.util.function.Supplier;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -60,23 +57,9 @@ public class SlicingWindowAggOperatorBuilder
 
     private SliceAssigner sliceAssigner;
 
-    private int indexOfCountStart = -1;
-
     public SlicingWindowAggOperatorBuilder sliceAssigner(SliceAssigner sliceAssigner) {
         this.sliceAssigner = sliceAssigner;
         return this;
-    }
-
-    /**
-     * Specify the index position of the COUNT(*) value in the accumulator buffer. This is only
-     * required for Hopping windows which uses this to determine whether the window is empty and
-     * then decide whether to register timer for the next window.
-     *
-     * @see HoppingSliceAssigner#nextTriggerWindow(long, Supplier)
-     */
-    public SlicingWindowAggOperatorBuilder countStarIndex(int indexOfCountStart) {
-        this.indexOfCountStart = indexOfCountStart;
-        return self();
     }
 
     @Override

@@ -21,10 +21,12 @@ package org.apache.flink.table.runtime.operators.aggregate.window.builder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.generated.GeneratedNamespaceAggsHandleFunction;
 import org.apache.flink.table.runtime.operators.window.windowtvf.common.AbstractWindowOperator;
+import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceAssigners;
 import org.apache.flink.table.runtime.typeutils.AbstractRowDataSerializer;
 import org.apache.flink.table.runtime.typeutils.PagedTypeSerializer;
 
 import java.time.ZoneId;
+import java.util.function.Supplier;
 
 import static org.apache.flink.util.Preconditions.checkNotNull;
 
@@ -48,10 +50,24 @@ public abstract class AbstractWindowAggOperatorBuilder<
     protected GeneratedNamespaceAggsHandleFunction<W> generatedAggregateFunction;
     protected GeneratedNamespaceAggsHandleFunction<W> localGeneratedAggregateFunction;
     protected GeneratedNamespaceAggsHandleFunction<W> globalGeneratedAggregateFunction;
+    protected int indexOfCountStart = -1;
     protected ZoneId shiftTimeZone;
 
     public T inputSerializer(AbstractRowDataSerializer<RowData> inputSerializer) {
         this.inputSerializer = inputSerializer;
+        return self();
+    }
+
+    /**
+     * Specify the index position of the COUNT(*) value in the accumulator buffer. This is required
+     * for consuming CDC upstream to check if the window needs to output data, or for Hopping
+     * windows which uses this to determine whether the window is empty and then decide whether to
+     * register timer for the next window.
+     *
+     * @see SliceAssigners.HoppingSliceAssigner#nextTriggerWindow(long, Supplier)
+     */
+    public T countStarIndex(int indexOfCountStart) {
+        this.indexOfCountStart = indexOfCountStart;
         return self();
     }
 

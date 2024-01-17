@@ -25,15 +25,9 @@ import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
 import org.apache.flink.streaming.api.operators.SimpleOperatorFactory;
 import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.data.RowData;
-import org.apache.flink.table.expressions.FieldReferenceExpression;
 import org.apache.flink.table.planner.codegen.CodeGeneratorContext;
 import org.apache.flink.table.planner.codegen.agg.AggsHandlerCodeGenerator;
 import org.apache.flink.table.planner.delegation.PlannerBase;
-import org.apache.flink.table.planner.plan.logical.LogicalWindow;
-import org.apache.flink.table.planner.plan.logical.SessionGroupWindow;
-import org.apache.flink.table.planner.plan.logical.SessionWindowSpec;
-import org.apache.flink.table.planner.plan.logical.TimeAttributeWindowingStrategy;
-import org.apache.flink.table.planner.plan.logical.WindowSpec;
 import org.apache.flink.table.planner.plan.logical.WindowingStrategy;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecEdge;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
@@ -50,18 +44,20 @@ import org.apache.flink.table.planner.utils.TableConfigUtils;
 import org.apache.flink.table.runtime.generated.GeneratedNamespaceAggsHandleFunction;
 import org.apache.flink.table.runtime.groupwindow.NamedWindowProperty;
 import org.apache.flink.table.runtime.groupwindow.WindowProperty;
-import org.apache.flink.table.runtime.groupwindow.WindowReference;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.operators.aggregate.window.builder.SlicingWindowAggOperatorBuilder;
+import org.apache.flink.table.runtime.operators.aggregate.window.builder.UnslicingWindowAggOperatorBuilder;
+import org.apache.flink.table.runtime.operators.window.TimeWindow;
+import org.apache.flink.table.runtime.operators.window.windowtvf.common.WindowAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SliceSharedAssigner;
+import org.apache.flink.table.runtime.operators.window.windowtvf.unslicing.UnsliceAssigner;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.runtime.typeutils.PagedTypeSerializer;
 import org.apache.flink.table.runtime.typeutils.RowDataSerializer;
 import org.apache.flink.table.runtime.util.TimeWindowUtil;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
-import org.apache.flink.util.Preconditions;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonCreator;
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
@@ -77,9 +73,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import static org.apache.flink.table.expressions.ApiExpressionUtils.intervalOfMillis;
-import static org.apache.flink.table.runtime.types.LogicalTypeDataTypeConverter.fromLogicalTypeToDataType;
 import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.Preconditions.checkState;
 
 /**
  * Stream {@link ExecNode} for window table-valued based aggregate.
@@ -170,9 +165,6 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
     @Override
     protected Transformation<RowData> translateToPlanInternal(
             PlannerBase planner, ExecNodeConfig config) {
-        if (shouldFallbackToGroupWindowAgg(windowing.getWindow())) {
-            return fallbackToGroupWindowAggregate(planner, config);
-        }
 
         final ExecEdge inputEdge = getInputEdges().get(0);
         final Transformation<RowData> inputTransform =
@@ -183,7 +175,7 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                 TimeWindowUtil.getShiftTimeZone(
                         windowing.getTimeAttributeType(),
                         TableConfigUtils.getLocalTimeZone(config));
-        final SliceAssigner sliceAssigner = createSliceAssigner(windowing, shiftTimeZone);
+        final WindowAssigner windowAssigner = createWindowAssigner(windowing, shiftTimeZone);
 
         final AggregateInfoList aggInfoList =
                 AggregateUtil.deriveStreamWindowAggregateInfoList(
@@ -194,9 +186,9 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                         windowing.getWindow(),
                         true); // isStateBackendDataViews
 
-        final GeneratedNamespaceAggsHandleFunction<Long> generatedAggsHandler =
+        final GeneratedNamespaceAggsHandleFunction<?> generatedAggsHandler =
                 createAggsHandler(
-                        sliceAssigner,
+                        windowAssigner,
                         aggInfoList,
                         config,
                         planner.getFlinkContext().getClassLoader(),
@@ -211,17 +203,42 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                         InternalTypeInfo.of(inputRowType));
         final LogicalType[] accTypes = convertToLogicalTypes(aggInfoList.getAccTypes());
 
-        final OneInputStreamOperator<RowData, RowData> windowOperator =
-                SlicingWindowAggOperatorBuilder.builder()
-                        .inputSerializer(new RowDataSerializer(inputRowType))
-                        .shiftTimeZone(shiftTimeZone)
-                        .keySerializer(
-                                (PagedTypeSerializer<RowData>)
-                                        selector.getProducedType().toSerializer())
-                        .sliceAssigner(sliceAssigner)
-                        .countStarIndex(aggInfoList.getIndexOfCountStar())
-                        .aggregate(generatedAggsHandler, new RowDataSerializer(accTypes))
-                        .build();
+        final boolean useSliceAssigner = useSliceAssigner(windowing.getWindow());
+
+        final OneInputStreamOperator<RowData, RowData> windowOperator;
+        if (useSliceAssigner) {
+            checkState(windowAssigner instanceof SliceAssigner);
+            windowOperator =
+                    SlicingWindowAggOperatorBuilder.builder()
+                            .inputSerializer(new RowDataSerializer(inputRowType))
+                            .shiftTimeZone(shiftTimeZone)
+                            .keySerializer(
+                                    (PagedTypeSerializer<RowData>)
+                                            selector.getProducedType().toSerializer())
+                            .sliceAssigner((SliceAssigner) windowAssigner)
+                            .countStarIndex(aggInfoList.getIndexOfCountStar())
+                            .aggregate(
+                                    (GeneratedNamespaceAggsHandleFunction<Long>)
+                                            generatedAggsHandler,
+                                    new RowDataSerializer(accTypes))
+                            .build();
+        } else {
+            checkState(windowAssigner instanceof UnsliceAssigner);
+            windowOperator =
+                    UnslicingWindowAggOperatorBuilder.builder()
+                            .inputSerializer(new RowDataSerializer(inputRowType))
+                            .shiftTimeZone(shiftTimeZone)
+                            .keySerializer(
+                                    (PagedTypeSerializer<RowData>)
+                                            selector.getProducedType().toSerializer())
+                            .unsliceAssigner((UnsliceAssigner<TimeWindow>) windowAssigner)
+                            .countStarIndex(aggInfoList.getIndexOfCountStar())
+                            .aggregate(
+                                    (GeneratedNamespaceAggsHandleFunction<TimeWindow>)
+                                            generatedAggsHandler,
+                                    new RowDataSerializer(accTypes))
+                            .build();
+        }
 
         final OneInputTransformation<RowData, RowData> transform =
                 ExecNodeUtil.createOneInputTransformation(
@@ -239,8 +256,8 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
         return transform;
     }
 
-    private GeneratedNamespaceAggsHandleFunction<Long> createAggsHandler(
-            SliceAssigner sliceAssigner,
+    private GeneratedNamespaceAggsHandleFunction<?> createAggsHandler(
+            WindowAssigner windowAssigner,
             AggregateInfoList aggInfoList,
             ExecNodeConfig config,
             ClassLoader classLoader,
@@ -255,7 +272,9 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                                 false) // copyInputField
                         .needAccumulate();
 
-        if (sliceAssigner instanceof SliceSharedAssigner) {
+        final boolean useSliceAssigner = useSliceAssigner(windowing.getWindow());
+
+        if (windowAssigner instanceof SliceSharedAssigner || !useSliceAssigner) {
             generator.needMerge(0, false, null);
         }
 
@@ -269,65 +288,20 @@ public class StreamExecWindowAggregate extends StreamExecWindowAggregateBase {
                                 .map(NamedWindowProperty::getProperty)
                                 .toArray(WindowProperty[]::new));
 
+        final Class<?> windowClass;
+        if (useSliceAssigner) {
+            // we use window end timestamp to indicate a slicing window, see SliceAssigner
+            windowClass = Long.class;
+        } else {
+            windowClass = TimeWindow.class;
+        }
+
         return generator.generateNamespaceAggsHandler(
                 "WindowAggsHandler",
                 aggInfoList,
                 JavaScalaConversionUtil.toScala(windowProperties),
-                sliceAssigner,
-                // we use window end timestamp to indicate a slicing window, see SliceAssigner
-                // TODO support unslicing window and using class Window here
-                Long.class,
+                windowAssigner,
+                windowClass,
                 shiftTimeZone);
-    }
-
-    /**
-     * TODO Currently, the operator of WindowAggregate does not support Session Window, and it needs
-     * to fall back to the legacy GroupWindowAggregate. See more at FLINK-34048.
-     */
-    private boolean shouldFallbackToGroupWindowAgg(WindowSpec windowSpec) {
-        return windowSpec instanceof SessionWindowSpec;
-    }
-
-    private Transformation<RowData> fallbackToGroupWindowAggregate(
-            PlannerBase planner, ExecNodeConfig config) {
-        Preconditions.checkState(windowing.getWindow() instanceof SessionWindowSpec);
-
-        if (windowing instanceof TimeAttributeWindowingStrategy) {
-            LogicalType timeAttributeType = windowing.getTimeAttributeType();
-            LogicalWindow logicalWindow =
-                    new SessionGroupWindow(
-                            new WindowReference("w$", timeAttributeType),
-                            new FieldReferenceExpression(
-                                    // mock an empty time field name here
-                                    "",
-                                    fromLogicalTypeToDataType(timeAttributeType),
-                                    0,
-                                    ((TimeAttributeWindowingStrategy) windowing)
-                                            .getTimeAttributeIndex()),
-                            intervalOfMillis(
-                                    ((SessionWindowSpec) windowing.getWindow())
-                                            .getGap()
-                                            .toMillis()));
-
-            StreamExecGroupWindowAggregate groupWindowAggregate =
-                    new StreamExecGroupWindowAggregate(
-                            planner.getTableConfig(),
-                            grouping,
-                            aggCalls,
-                            logicalWindow,
-                            namedWindowProperties,
-                            needRetraction,
-                            InputProperty.DEFAULT,
-                            (RowType) getOutputType(),
-                            getDescription());
-
-            groupWindowAggregate.setInputEdges(getInputEdges());
-            return groupWindowAggregate.translateToPlanInternal(planner, config);
-        }
-
-        throw new UnsupportedOperationException(
-                String.format(
-                        "Unsupported windowing strategy: %s for session window.",
-                        windowing.getClass()));
     }
 }

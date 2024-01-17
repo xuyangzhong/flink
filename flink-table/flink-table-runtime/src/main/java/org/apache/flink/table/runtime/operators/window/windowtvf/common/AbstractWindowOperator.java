@@ -74,9 +74,7 @@ import static org.apache.flink.util.Preconditions.checkNotNull;
  * <p>See more details in {@link
  * org.apache.flink.table.runtime.operators.window.windowtvf.slicing.SlicingWindowOperator}.
  *
- * <p>TODO support unslicing window operator.
- *
- * <p>TODO support early / late fire.
+ * <p>TODO support early / late fire, see more at FLINK-29692.
  */
 @Internal
 public abstract class AbstractWindowOperator<K, W> extends TableStreamOperator<RowData>
@@ -236,8 +234,8 @@ public abstract class AbstractWindowOperator<K, W> extends TableStreamOperator<R
     private void onTimer(InternalTimer<K, W> timer) throws Exception {
         setCurrentKey(timer.getKey());
         W window = timer.getNamespace();
-        windowProcessor.fireWindow(window);
-        windowProcessor.clearWindow(window);
+        windowProcessor.fireWindow(timer.getTimestamp(), window);
+        windowProcessor.clearWindow(timer.getTimestamp(), window);
         // we don't need to clear window timers,
         // because there should only be one timer for each window now, which is current timer.
     }

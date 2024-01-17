@@ -630,10 +630,11 @@ class AggsHandlerCodeGenerator(
       name: String,
       aggInfoList: AggregateInfoList,
       windowProperties: Seq[WindowProperty],
-      sliceAssigner: SliceAssigner,
-      shiftTimeZone: ZoneId): GeneratedNamespaceAggsHandleFunction[JLong] = {
+      windowAssigner: WindowAssigner,
+      windowClass: Class[N],
+      shiftTimeZone: ZoneId): GeneratedNamespaceAggsHandleFunction[N] = {
     this.sliceAssignerTerm = newName(ctx, "sliceAssigner")
-    ctx.addReusableObjectWithName(sliceAssigner, sliceAssignerTerm)
+    ctx.addReusableObjectWithName(windowAssigner, sliceAssignerTerm)
     generateNamespaceAggsHandler(name, aggInfoList, windowProperties, windowClass, shiftTimeZone)
   }
 

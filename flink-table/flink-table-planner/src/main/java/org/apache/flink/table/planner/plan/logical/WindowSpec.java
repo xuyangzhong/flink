@@ -32,7 +32,7 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonTyp
 })
 public interface WindowSpec {
 
-    String toSummaryString(String windowing);
+    String toSummaryString(String windowing, String[] inputFieldNames);
 
     /**
      * Return if the window is a aligned window.

@@ -84,6 +84,8 @@ public abstract class AbstractWindowAggProcessor<W> implements WindowProcessor<W
     /** state schema: [key, window, accumulator]. */
     protected transient WindowValueState<W> windowState;
 
+    protected transient InternalValueState<RowData, W, RowData> internalWindowState;
+
     protected transient JoinedRowData reuseOutput;
 
     public AbstractWindowAggProcessor(
@@ -110,7 +112,8 @@ public abstract class AbstractWindowAggProcessor<W> implements WindowProcessor<W
                         .getOrCreateKeyedState(
                                 namespaceSerializer,
                                 new ValueStateDescriptor<>("window-aggs", accSerializer));
-        this.windowState = new WindowValueState<>((InternalValueState<RowData, W, RowData>) state);
+        this.internalWindowState = (InternalValueState<RowData, W, RowData>) state;
+        this.windowState = new WindowValueState<>(internalWindowState);
         this.clockService = ClockService.of(ctx.getTimerService());
         this.aggregator =
                 genAggsHandler.newInstance(ctx.getRuntimeContext().getUserCodeClassLoader());
