@@ -27,18 +27,20 @@ import org.apache.flink.table.data.TimestampData;
 import org.apache.flink.table.data.utils.JoinedRowData;
 import org.apache.flink.table.runtime.operators.TableStreamOperator;
 import org.apache.flink.table.runtime.operators.window.TimeWindow;
+import org.apache.flink.table.runtime.operators.window.groupwindow.assigners.GroupWindowAssigner;
 
 import java.time.ZoneId;
 import java.util.Collection;
 
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toEpochMills;
+import static org.apache.flink.util.Preconditions.checkArgument;
 
 /**
- * The {@link WindowTableFunctionOperator} acts as a table-valued function to assign windows for
+ * The {@link WindowTableFunctionOperatorBase} acts as a table-valued function to assign windows for
  * input row. Output row includes the original columns as well additional 3 columns named {@code
  * window_start}, {@code window_end}, {@code window_time} to indicate the assigned window.
  */
-public abstract class WindowTableFunctionOperator extends TableStreamOperator<RowData>
+public abstract class WindowTableFunctionOperatorBase extends TableStreamOperator<RowData>
         implements OneInputStreamOperator<RowData, RowData> {
 
     /**
@@ -48,14 +50,24 @@ public abstract class WindowTableFunctionOperator extends TableStreamOperator<Ro
      */
     protected final ZoneId shiftTimeZone;
 
+    protected final int rowtimeIndex;
+
+    protected final GroupWindowAssigner<TimeWindow> windowAssigner;
+
     /** This is used for emitting elements with a given timestamp. */
     private transient TimestampedCollector<RowData> collector;
 
     private transient JoinedRowData outRow;
     private transient GenericRowData windowProperties;
 
-    public WindowTableFunctionOperator(ZoneId shiftTimeZone) {
+    public WindowTableFunctionOperatorBase(
+            GroupWindowAssigner<TimeWindow> windowAssigner,
+            int rowtimeIndex,
+            ZoneId shiftTimeZone) {
         this.shiftTimeZone = shiftTimeZone;
+        this.rowtimeIndex = rowtimeIndex;
+        this.windowAssigner = windowAssigner;
+        checkArgument(!windowAssigner.isEventTime() || rowtimeIndex >= 0);
 
         setChainingStrategy(ChainingStrategy.ALWAYS);
     }
@@ -68,6 +80,14 @@ public abstract class WindowTableFunctionOperator extends TableStreamOperator<Ro
 
         outRow = new JoinedRowData();
         windowProperties = new GenericRowData(3);
+    }
+
+    @Override
+    public void close() throws Exception {
+        super.close();
+        if (collector != null) {
+            collector.close();
+        }
     }
 
     protected void collect(RowData inputRow, Collection<TimeWindow> allWindows) {

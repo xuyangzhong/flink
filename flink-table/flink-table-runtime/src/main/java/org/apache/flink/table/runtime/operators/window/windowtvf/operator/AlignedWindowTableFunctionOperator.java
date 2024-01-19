@@ -28,7 +28,6 @@ import java.time.ZoneId;
 import java.util.Collection;
 
 import static org.apache.flink.table.runtime.util.TimeWindowUtil.toUtcTimestampMills;
-import static org.apache.flink.util.Preconditions.checkArgument;
 
 /**
  * The operator for aligned window table function.
@@ -37,28 +36,21 @@ import static org.apache.flink.util.Preconditions.checkArgument;
  * org.apache.flink.table.runtime.operators.window.windowtvf.common.AbstractWindowOperator}.
  *
  * <p>Note: The operator only applies for Window TVF with row semantics (e.g TUMBLE/HOP/CUMULATE)
- * instead of set semantics (e.g Session).
+ * instead of set semantics (e.g SESSION).
  *
  * <p>The operator emits result per record instead of at the end of window.
  *
  * <p>TODO use {@link WindowAssigner} instead of using {@link GroupWindowAssigner}.
  */
-public class AlignedWindowTableFunctionOperator extends WindowTableFunctionOperator {
+public class AlignedWindowTableFunctionOperator extends WindowTableFunctionOperatorBase {
 
     private static final long serialVersionUID = 1L;
-
-    private final GroupWindowAssigner<TimeWindow> windowAssigner;
-
-    private final int rowtimeIndex;
 
     public AlignedWindowTableFunctionOperator(
             GroupWindowAssigner<TimeWindow> windowAssigner,
             int rowtimeIndex,
             ZoneId shiftTimeZone) {
-        super(shiftTimeZone);
-        checkArgument(!windowAssigner.isEventTime() || rowtimeIndex >= 0);
-        this.windowAssigner = windowAssigner;
-        this.rowtimeIndex = rowtimeIndex;
+        super(windowAssigner, rowtimeIndex, shiftTimeZone);
     }
 
     @Override

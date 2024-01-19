@@ -75,16 +75,21 @@ public abstract class StreamExecWindowAggregateBase extends StreamExecAggregateB
             WindowingStrategy windowingStrategy, ZoneId shiftTimeZone) {
         WindowSpec windowSpec = windowingStrategy.getWindow();
         if (windowingStrategy instanceof WindowAttachedWindowingStrategy) {
-            checkArgument(
-                    useSliceAssigner(windowSpec),
-                    "UnsliceAssigner with WindowAttachedWindowingStrategy is not supported yet.");
-
+            int windowStartIndex =
+                    ((WindowAttachedWindowingStrategy) windowingStrategy).getWindowStart();
             int windowEndIndex =
                     ((WindowAttachedWindowingStrategy) windowingStrategy).getWindowEnd();
-            // we don't need time attribute to assign windows, use a magic value in this case
-            SliceAssigner innerAssigner =
-                    createWindowAssigner(windowSpec, Integer.MAX_VALUE, shiftTimeZone);
-            return SliceAssigners.windowed(windowEndIndex, innerAssigner);
+            if (useSliceAssigner(windowSpec)) {
+                // we don't need time attribute to assign windows, use a magic value in this case
+                SliceAssigner innerAssigner =
+                        createSliceAssigner(windowSpec, Integer.MAX_VALUE, shiftTimeZone);
+                return SliceAssigners.windowed(windowEndIndex, innerAssigner);
+            } else {
+                UnsliceAssigner<TimeWindow> innerAssigner =
+                        createUnsliceAssigner(windowSpec, windowEndIndex, shiftTimeZone);
+                return UnsliceAssigners.windowed(
+                        windowStartIndex, windowEndIndex, innerAssigner, shiftTimeZone);
+            }
 
         } else if (windowingStrategy instanceof SliceAttachedWindowingStrategy) {
             checkArgument(
@@ -94,7 +99,7 @@ public abstract class StreamExecWindowAggregateBase extends StreamExecAggregateB
             int sliceEndIndex = ((SliceAttachedWindowingStrategy) windowingStrategy).getSliceEnd();
             // we don't need time attribute to assign windows, use a magic value in this case
             SliceAssigner innerAssigner =
-                    createWindowAssigner(windowSpec, Integer.MAX_VALUE, shiftTimeZone);
+                    createSliceAssigner(windowSpec, Integer.MAX_VALUE, shiftTimeZone);
             return SliceAssigners.sliced(sliceEndIndex, innerAssigner);
 
         } else if (windowingStrategy instanceof TimeAttributeWindowingStrategy) {
@@ -107,7 +112,7 @@ public abstract class StreamExecWindowAggregateBase extends StreamExecAggregateB
                 timeAttributeIndex = -1;
             }
             if (useSliceAssigner(windowSpec)) {
-                return createWindowAssigner(windowSpec, timeAttributeIndex, shiftTimeZone);
+                return createSliceAssigner(windowSpec, timeAttributeIndex, shiftTimeZone);
             } else {
                 return createUnsliceAssigner(windowSpec, timeAttributeIndex, shiftTimeZone);
             }
@@ -121,7 +126,7 @@ public abstract class StreamExecWindowAggregateBase extends StreamExecAggregateB
         return window.isAlignedWindow();
     }
 
-    protected SliceAssigner createWindowAssigner(
+    protected SliceAssigner createSliceAssigner(
             WindowSpec windowSpec, int timeAttributeIndex, ZoneId shiftTimeZone) {
         if (windowSpec instanceof TumblingWindowSpec) {
             Duration size = ((TumblingWindowSpec) windowSpec).getSize();

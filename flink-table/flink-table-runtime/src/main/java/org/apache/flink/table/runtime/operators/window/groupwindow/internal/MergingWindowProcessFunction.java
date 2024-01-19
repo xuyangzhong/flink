@@ -26,6 +26,7 @@ import org.apache.flink.table.runtime.generated.NamespaceAggsHandleFunctionBase;
 import org.apache.flink.table.runtime.operators.window.Window;
 import org.apache.flink.table.runtime.operators.window.groupwindow.assigners.MergingWindowAssigner;
 import org.apache.flink.table.runtime.operators.window.groupwindow.context.WindowContext;
+import org.apache.flink.util.function.BiConsumerWithException;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -50,6 +51,8 @@ public class MergingWindowProcessFunction<K, W extends Window>
 
     private List<W> reuseActualWindows;
 
+    private final BiConsumerWithException<W, Collection<W>, Exception> accMergingConsumer;
+
     public MergingWindowProcessFunction(
             MergingWindowAssigner<W> windowAssigner,
             NamespaceAggsHandleFunctionBase<W> windowAggregator,
@@ -58,6 +61,19 @@ public class MergingWindowProcessFunction<K, W extends Window>
         super(windowAssigner, windowAggregator, allowedLateness);
         this.windowAssigner = windowAssigner;
         this.windowSerializer = windowSerializer;
+        this.accMergingConsumer = new DefaultAccMergingConsumer();
+    }
+
+    public MergingWindowProcessFunction(
+            MergingWindowAssigner<W> windowAssigner,
+            NamespaceAggsHandleFunctionBase<W> windowAggregator,
+            TypeSerializer<W> windowSerializer,
+            long allowedLateness,
+            BiConsumerWithException<W, Collection<W>, Exception> accMergingConsumer) {
+        super(windowAssigner, windowAggregator, allowedLateness);
+        this.windowAssigner = windowAssigner;
+        this.windowSerializer = windowSerializer;
+        this.accMergingConsumer = accMergingConsumer;
     }
 
     @Override
@@ -125,6 +141,11 @@ public class MergingWindowProcessFunction<K, W extends Window>
         }
     }
 
+    /** Get the state window as the namespace stored acc in the data about this actual window. */
+    public W getStateWindow(W window) throws Exception {
+        return mergingWindows.getStateWindow(window);
+    }
+
     private class MergingFunctionImpl implements MergingWindowSet.MergeFunction<W> {
 
         @Override
@@ -167,23 +188,39 @@ public class MergingWindowProcessFunction<K, W extends Window>
 
             // merge the merged state windows into the newly resulting state window
             if (!stateWindowsToBeMerged.isEmpty()) {
-                RowData targetAcc = ctx.getWindowAccumulators(stateWindowResult);
-                if (targetAcc == null) {
-                    targetAcc = windowAggregator.createAccumulators();
-                }
-                windowAggregator.setAccumulators(stateWindowResult, targetAcc);
-                for (W w : stateWindowsToBeMerged) {
-                    RowData acc = ctx.getWindowAccumulators(w);
-                    if (acc != null) {
-                        windowAggregator.merge(w, acc);
-                    }
-                    // clear merged window
-                    ctx.clearWindowState(w);
-                    ctx.clearPreviousState(w);
-                }
-                targetAcc = windowAggregator.getAccumulators();
-                ctx.setWindowAccumulators(stateWindowResult, targetAcc);
+                accMergingConsumer.accept(stateWindowResult, stateWindowsToBeMerged);
             }
+        }
+    }
+
+    /**
+     * A default merge consumer that merges the state windows into the target state window.
+     *
+     * <p>The first parameter is the target state window, the second parameter is the state windows
+     * that need to be merged.
+     */
+    private class DefaultAccMergingConsumer
+            implements BiConsumerWithException<W, Collection<W>, Exception> {
+
+        @Override
+        public void accept(W stateWindowResult, Collection<W> stateWindowsToBeMerged)
+                throws Exception {
+            RowData targetAcc = ctx.getWindowAccumulators(stateWindowResult);
+            if (targetAcc == null) {
+                targetAcc = windowAggregator.createAccumulators();
+            }
+            windowAggregator.setAccumulators(stateWindowResult, targetAcc);
+            for (W w : stateWindowsToBeMerged) {
+                RowData acc = ctx.getWindowAccumulators(w);
+                if (acc != null) {
+                    windowAggregator.merge(w, acc);
+                }
+                // clear merged window
+                ctx.clearWindowState(w);
+                ctx.clearPreviousState(w);
+            }
+            targetAcc = windowAggregator.getAccumulators();
+            ctx.setWindowAccumulators(stateWindowResult, targetAcc);
         }
     }
 }

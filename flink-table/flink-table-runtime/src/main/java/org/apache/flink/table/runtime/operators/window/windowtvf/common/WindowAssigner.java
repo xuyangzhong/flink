@@ -18,6 +18,7 @@
 
 package org.apache.flink.table.runtime.operators.window.windowtvf.common;
 
+import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.runtime.operators.window.groupwindow.assigners.GroupWindowAssigner;
 
 import java.io.Serializable;
@@ -31,6 +32,7 @@ import java.io.Serializable;
  *
  * <p>See more details in {@link AbstractWindowOperator}.
  */
+@Internal
 public interface WindowAssigner extends Serializable {
 
     /**
@@ -38,4 +40,6 @@ public interface WindowAssigner extends Serializable {
      * based on processing time.
      */
     boolean isEventTime();
+
+    String getDescription();
 }

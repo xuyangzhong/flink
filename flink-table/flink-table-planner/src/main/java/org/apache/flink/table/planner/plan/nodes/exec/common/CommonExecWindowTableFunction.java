@@ -18,13 +18,15 @@
 
 package org.apache.flink.table.planner.plan.nodes.exec.common;
 
+import org.apache.flink.api.common.ExecutionConfig;
 import org.apache.flink.api.dag.Transformation;
 import org.apache.flink.configuration.ReadableConfig;
-import org.apache.flink.table.api.TableException;
+import org.apache.flink.streaming.api.transformations.OneInputTransformation;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.planner.delegation.PlannerBase;
 import org.apache.flink.table.planner.plan.logical.SessionWindowSpec;
 import org.apache.flink.table.planner.plan.logical.TimeAttributeWindowingStrategy;
+import org.apache.flink.table.planner.plan.logical.WindowSpec;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecEdge;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.ExecNodeBase;
@@ -34,13 +36,17 @@ import org.apache.flink.table.planner.plan.nodes.exec.InputProperty;
 import org.apache.flink.table.planner.plan.nodes.exec.SingleTransformationTranslator;
 import org.apache.flink.table.planner.plan.nodes.exec.batch.BatchExecNode;
 import org.apache.flink.table.planner.plan.nodes.exec.utils.ExecNodeUtil;
+import org.apache.flink.table.planner.plan.utils.KeySelectorUtil;
 import org.apache.flink.table.planner.utils.TableConfigUtils;
+import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.operators.window.TimeWindow;
 import org.apache.flink.table.runtime.operators.window.groupwindow.assigners.GroupWindowAssigner;
 import org.apache.flink.table.runtime.operators.window.windowtvf.operator.AlignedWindowTableFunctionOperator;
-import org.apache.flink.table.runtime.operators.window.windowtvf.operator.WindowTableFunctionOperator;
+import org.apache.flink.table.runtime.operators.window.windowtvf.operator.UnalignedWindowTableFunctionOperator;
+import org.apache.flink.table.runtime.operators.window.windowtvf.operator.WindowTableFunctionOperatorBase;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.runtime.util.TimeWindowUtil;
+import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.table.types.logical.RowType;
 
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.annotation.JsonProperty;
@@ -51,6 +57,7 @@ import java.util.List;
 import static org.apache.flink.table.planner.plan.utils.WindowTableFunctionUtil.createWindowAssigner;
 import static org.apache.flink.util.Preconditions.checkArgument;
 import static org.apache.flink.util.Preconditions.checkNotNull;
+import static org.apache.flink.util.Preconditions.checkState;
 
 /** Base {@link ExecNode} for window table-valued function. */
 public abstract class CommonExecWindowTableFunction extends ExecNodeBase<RowData>
@@ -80,22 +87,22 @@ public abstract class CommonExecWindowTableFunction extends ExecNodeBase<RowData
     @Override
     protected Transformation<RowData> translateToPlanInternal(
             PlannerBase planner, ExecNodeConfig config) {
-        if (windowingStrategy.getWindow() instanceof SessionWindowSpec) {
-            // TODO Support session window table function in ExecWindowTableFunction. See
-            //  more at FLINK-34100
-            throw new TableException("Session Window TableFunction is not supported yet.");
-        }
         final ExecEdge inputEdge = getInputEdges().get(0);
         final Transformation<RowData> inputTransform =
                 (Transformation<RowData>) inputEdge.translateToPlan(planner);
-        final WindowTableFunctionOperator windowTableFunctionOperator;
-        if (windowingStrategy.getWindow().isAlignedWindow()) {
-            windowTableFunctionOperator = createAlignedWindowTableFunctionOperator(config);
+        final boolean isAlignedWindow = windowingStrategy.getWindow().isAlignedWindow();
+        if (isAlignedWindow) {
+            return translateWithAlignedWindow(config, inputTransform);
         } else {
-            throw new UnsupportedOperationException(
-                    "Currently only aligned window is supported for window table-valued function.");
+            return translateWithUnalignedWindow(
+                    planner, config, (RowType) inputEdge.getOutputType(), inputTransform);
         }
+    }
 
+    private Transformation<RowData> translateWithAlignedWindow(
+            ExecNodeConfig config, Transformation<RowData> inputTransform) {
+        final WindowTableFunctionOperatorBase windowTableFunctionOperator =
+                createAlignedWindowTableFunctionOperator(config);
         return ExecNodeUtil.createOneInputTransformation(
                 inputTransform,
                 createTransformationMeta(WINDOW_TRANSFORMATION, config),
@@ -105,7 +112,43 @@ public abstract class CommonExecWindowTableFunction extends ExecNodeBase<RowData
                 false);
     }
 
-    private WindowTableFunctionOperator createAlignedWindowTableFunctionOperator(
+    private Transformation<RowData> translateWithUnalignedWindow(
+            PlannerBase planner,
+            ExecNodeConfig config,
+            RowType inputRowType,
+            Transformation<RowData> inputTransform) {
+        final WindowTableFunctionOperatorBase windowTableFunctionOperator =
+                createUnalignedWindowTableFunctionOperator(config, inputRowType);
+        final OneInputTransformation<RowData, RowData> transform =
+                ExecNodeUtil.createOneInputTransformation(
+                        inputTransform,
+                        createTransformationMeta(WINDOW_TRANSFORMATION, config),
+                        windowTableFunctionOperator,
+                        InternalTypeInfo.of(getOutputType()),
+                        inputTransform.getParallelism(),
+                        false);
+
+        final int[] partitionKeys = extractPartitionKeys(windowingStrategy.getWindow());
+        // set KeyType and Selector for state
+        final RowDataKeySelector selector =
+                KeySelectorUtil.getRowDataSelector(
+                        planner.getFlinkContext().getClassLoader(),
+                        partitionKeys,
+                        InternalTypeInfo.of(inputRowType));
+        transform.setStateKeySelector(selector);
+        transform.setStateKeyType(selector.getProducedType());
+        return transform;
+    }
+
+    private int[] extractPartitionKeys(WindowSpec window) {
+        checkState(
+                window instanceof SessionWindowSpec,
+                "Only support unaligned window with session window now.");
+
+        return ((SessionWindowSpec) window).getPartitionKeyIndices();
+    }
+
+    private WindowTableFunctionOperatorBase createAlignedWindowTableFunctionOperator(
             ExecNodeConfig config) {
         // TODO use WindowAssigner instead of using GroupWindowAssigner
         GroupWindowAssigner<TimeWindow> windowAssigner = createWindowAssigner(windowingStrategy);
@@ -115,5 +158,22 @@ public abstract class CommonExecWindowTableFunction extends ExecNodeBase<RowData
                         TableConfigUtils.getLocalTimeZone(config));
         return new AlignedWindowTableFunctionOperator(
                 windowAssigner, windowingStrategy.getTimeAttributeIndex(), shiftTimeZone);
+    }
+
+    private WindowTableFunctionOperatorBase createUnalignedWindowTableFunctionOperator(
+            ExecNodeConfig config, RowType inputRowType) {
+        // TODO use WindowAssigner instead of using GroupWindowAssigner
+        GroupWindowAssigner<TimeWindow> windowAssigner = createWindowAssigner(windowingStrategy);
+        final ZoneId shiftTimeZone =
+                TimeWindowUtil.getShiftTimeZone(
+                        windowingStrategy.getTimeAttributeType(),
+                        TableConfigUtils.getLocalTimeZone(config));
+
+        return new UnalignedWindowTableFunctionOperator(
+                windowAssigner,
+                windowAssigner.getWindowSerializer(new ExecutionConfig()),
+                inputRowType.getChildren().toArray(new LogicalType[0]),
+                windowingStrategy.getTimeAttributeIndex(),
+                shiftTimeZone);
     }
 }
