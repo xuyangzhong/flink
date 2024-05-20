@@ -275,7 +275,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
 
         Optional<StateRequestContainer> toRun =
                 stateRequestsBuffer.popActive(
-                        batchSize, () -> stateExecutor.createStateRequestContainer());
+                        batchSize, () -> stateExecutor.createStateRequestContainer(this));
         if (!toRun.isPresent() || toRun.get().isEmpty()) {
             return;
         }

@@ -21,6 +21,7 @@ package org.apache.flink.state.forst;
 import org.apache.flink.runtime.asyncprocessing.StateExecutor;
 import org.apache.flink.runtime.asyncprocessing.StateRequest;
 import org.apache.flink.runtime.asyncprocessing.StateRequestContainer;
+import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
 import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
@@ -98,6 +99,14 @@ public class ForStStateExecutor implements StateExecutor {
                         futures.add(getOperations.process());
                     }
 
+                    List<ForStDBIterRequest<?>> iterRequests =
+                            stateRequestClassifier.pollDbIterRequests();
+                    if (!iterRequests.isEmpty()) {
+                        ForStIterateOperation iterOperations =
+                                new ForStIterateOperation(db, iterRequests, workerThreads);
+                        futures.add(iterOperations.process());
+                    }
+
                     try {
                         FutureUtils.waitForAll(futures).get();
                     } catch (InterruptedException | ExecutionException e) {
@@ -117,8 +126,9 @@ public class ForStStateExecutor implements StateExecutor {
     }
 
     @Override
-    public StateRequestContainer createStateRequestContainer() {
-        return new ForStStateRequestClassifier();
+    public StateRequestContainer createStateRequestContainer(
+            StateRequestHandler stateRequestHandler) {
+        return new ForStStateRequestClassifier(stateRequestHandler);
     }
 
     @Override

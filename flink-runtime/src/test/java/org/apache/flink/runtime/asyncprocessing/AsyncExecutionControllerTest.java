@@ -751,7 +751,8 @@ class AsyncExecutionControllerTest {
         }
 
         @Override
-        public StateRequestContainer createStateRequestContainer() {
+        public StateRequestContainer createStateRequestContainer(
+                StateRequestHandler stateRequestHandler) {
             return new MockStateRequestContainer();
         }
 

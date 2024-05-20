@@ -19,6 +19,7 @@
 package org.apache.flink.state.forst;
 
 import org.rocksdb.RocksDB;
+import org.rocksdb.RocksIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -26,6 +27,8 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.flink.state.forst.ForStIterateOperation.startWithKeyPrefix;
 
 /**
  * The general-purpose multiGet operation implementation for ForStDB, which simulates multiGet by
@@ -58,15 +61,33 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
             ForStDBGetRequest<?, ?> request = batchRequest.get(i);
             executor.execute(
                     () -> {
+                        RocksIterator iter = null;
                         try {
                             byte[] key = request.buildSerializedKey();
-                            byte[] value = db.get(request.getColumnFamilyHandle(), key);
-                            request.completeStateFuture(value);
+                            if (request.checkMapEmpty()) {
+                                iter = db.newIterator(request.getColumnFamilyHandle());
+                                iter.seek(key);
+                                if (iter.isValid()
+                                        && startWithKeyPrefix(
+                                                key,
+                                                iter.key(),
+                                                request.getKeyGroupPrefixBytes())) {
+                                    request.completeStateFuture(new byte[0]);
+                                } else {
+                                    request.completeStateFuture(null);
+                                }
+                            } else {
+                                byte[] value = db.get(request.getColumnFamilyHandle(), key);
+                                request.completeStateFuture(value);
+                            }
                         } catch (Exception e) {
                             LOG.warn(
                                     "Error when process general multiGet operation for forStDB", e);
                             future.completeExceptionally(e);
                         } finally {
+                            if (iter != null) {
+                                iter.close();
+                            }
                             if (counter.decrementAndGet() == 0
                                     && !future.isCompletedExceptionally()) {
                                 future.complete(null);

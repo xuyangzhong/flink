@@ -38,7 +38,7 @@ public interface StateExecutor {
      * Create a {@link StateRequestContainer} which is used to hold the batched {@link
      * StateRequest}.
      */
-    StateRequestContainer createStateRequestContainer();
+    StateRequestContainer createStateRequestContainer(StateRequestHandler stateRequestHandler);
 
     /** Shutdown the StateExecutor, and new committed state execution requests will be rejected. */
     void shutdown();

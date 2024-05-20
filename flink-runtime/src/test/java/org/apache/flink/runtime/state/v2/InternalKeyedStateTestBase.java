@@ -174,7 +174,7 @@ public class InternalKeyedStateTestBase {
         }
 
         @Override
-        public StateRequestContainer createStateRequestContainer() {
+        public StateRequestContainer createStateRequestContainer(StateRequestHandler handler) {
             return new TestStateRequestContainer();
         }
 

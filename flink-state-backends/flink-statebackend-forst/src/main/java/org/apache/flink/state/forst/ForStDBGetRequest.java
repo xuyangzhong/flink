@@ -34,12 +34,35 @@ public class ForStDBGetRequest<K, V> {
 
     private final K key;
     private final ForStInnerTable<K, V> table;
-    private final InternalStateFuture<V> future;
+    private final InternalStateFuture future;
 
-    private ForStDBGetRequest(K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future) {
+    private final boolean toBoolean;
+    private final boolean checkMapEmpty;
+
+    private int keyGroupPrefixBytes = 1;
+
+    private ForStDBGetRequest(
+            K key,
+            ForStInnerTable<K, V> table,
+            InternalStateFuture future,
+            boolean toBoolean,
+            boolean checkMapEmpty) {
         this.key = key;
         this.table = table;
         this.future = future;
+        this.toBoolean = toBoolean;
+        this.checkMapEmpty = checkMapEmpty;
+        if (table instanceof ForStMapState) {
+            keyGroupPrefixBytes = ((ForStMapState) table).getKeyGroupPrefixBytes();
+        }
+    }
+
+    public int getKeyGroupPrefixBytes() {
+        return keyGroupPrefixBytes;
+    }
+
+    public boolean checkMapEmpty() {
+        return checkMapEmpty;
     }
 
     public byte[] buildSerializedKey() throws IOException {
@@ -50,17 +73,36 @@ public class ForStDBGetRequest<K, V> {
         return table.getColumnFamilyHandle();
     }
 
+    @SuppressWarnings("rawtypes")
     public void completeStateFuture(byte[] bytesValue) throws IOException {
+        if (toBoolean) {
+            if (checkMapEmpty) {
+                ((InternalStateFuture<Boolean>) future).complete(bytesValue == null);
+                return;
+            }
+            ((InternalStateFuture<Boolean>) future).complete(bytesValue != null);
+            return;
+        }
         if (bytesValue == null) {
-            future.complete(null);
+            ((InternalStateFuture<V>) future).complete(null);
             return;
         }
         V value = table.deserializeValue(bytesValue);
-        future.complete(value);
+        ((InternalStateFuture<V>) future).complete(value);
     }
 
     static <K, V> ForStDBGetRequest<K, V> of(
             K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future) {
-        return new ForStDBGetRequest<>(key, table, future);
+        return new ForStDBGetRequest<>(key, table, future, false, false);
+    }
+
+    @SuppressWarnings("rawtypes")
+    static <K, V> ForStDBGetRequest<K, V> of(
+            K key,
+            ForStInnerTable<K, V> table,
+            InternalStateFuture future,
+            boolean toBoolean,
+            boolean checkMapEmpty) {
+        return new ForStDBGetRequest<>(key, table, future, toBoolean, checkMapEmpty);
     }
 }

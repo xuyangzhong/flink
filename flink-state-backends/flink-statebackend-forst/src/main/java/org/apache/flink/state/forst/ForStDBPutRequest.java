@@ -25,6 +25,7 @@ import org.rocksdb.ColumnFamilyHandle;
 import javax.annotation.Nullable;
 
 import java.io.IOException;
+import java.util.Map;
 
 /**
  * The Put access request for ForStDB.
@@ -34,21 +35,31 @@ import java.io.IOException;
  */
 public class ForStDBPutRequest<K, V> {
 
-    private final K key;
-    @Nullable private final V value;
-    private final ForStInnerTable<K, V> table;
-    private final InternalStateFuture<Void> future;
+    protected final K key;
 
-    private ForStDBPutRequest(
+    @Nullable protected final V value;
+
+    protected final ForStInnerTable<K, V> table;
+
+    protected final InternalStateFuture<Void> future;
+
+    protected final boolean tableIsMap;
+
+    protected ForStDBPutRequest(
             K key, V value, ForStInnerTable<K, V> table, InternalStateFuture<Void> future) {
         this.key = key;
         this.value = value;
         this.table = table;
         this.future = future;
+        this.tableIsMap = table instanceof ForStMapState;
     }
 
     public boolean valueIsNull() {
         return value == null;
+    }
+
+    public boolean valueIsMap() {
+        return value instanceof Map;
     }
 
     public ColumnFamilyHandle getColumnFamilyHandle() {

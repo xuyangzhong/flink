@@ -18,19 +18,18 @@
 
 package org.apache.flink.state.forst;
 
+import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.RocksDB;
-import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.Executor;
 
 /** The writeBatch operation implementation for ForStDB. */
 public class ForStWriteBatchOperation implements ForStDBOperation {
-
-    private static final int PER_RECORD_ESTIMATE_BYTES = 100;
 
     private final RocksDB db;
 
@@ -55,22 +54,44 @@ public class ForStWriteBatchOperation implements ForStDBOperation {
     public CompletableFuture<Void> process() {
         return CompletableFuture.runAsync(
                 () -> {
-                    try (WriteBatch writeBatch =
-                            new WriteBatch(batchRequest.size() * PER_RECORD_ESTIMATE_BYTES)) {
+                    try (ForStDBWriteBatchWrapper writeBatch =
+                            new ForStDBWriteBatchWrapper(db, writeOptions, batchRequest.size())) {
                         for (ForStDBPutRequest<?, ?> request : batchRequest) {
+                            ColumnFamilyHandle cf = request.getColumnFamilyHandle();
                             if (request.valueIsNull()) {
-                                // put(key, null) == delete(key)
-                                writeBatch.delete(
-                                        request.getColumnFamilyHandle(),
-                                        request.buildSerializedKey());
+                                if (request instanceof ForStDBBunchPutRequest) {
+                                    ForStDBBunchPutRequest<?> bunchPutRequest =
+                                            (ForStDBBunchPutRequest<?>) request;
+                                    byte[] primaryKey = bunchPutRequest.buildSerializedKey(null);
+                                    byte[] endKey = ForStDBBunchPutRequest.nextBytes(primaryKey);
+
+                                    // use deleteRange delete all records under the primary key
+                                    db.deleteRange(
+                                            request.getColumnFamilyHandle(), primaryKey, endKey);
+                                } else {
+                                    // put(key, null) == delete(key)
+                                    writeBatch.remove(
+                                            request.getColumnFamilyHandle(),
+                                            request.buildSerializedKey());
+                                }
+                            } else if (!request.valueIsMap()) {
+                                byte[] key = request.buildSerializedKey();
+                                byte[] value = request.buildSerializedValue();
+                                writeBatch.put(cf, key, value);
                             } else {
-                                writeBatch.put(
-                                        request.getColumnFamilyHandle(),
-                                        request.buildSerializedKey(),
-                                        request.buildSerializedValue());
+                                ForStDBBunchPutRequest<?> bunchPutRequest =
+                                        (ForStDBBunchPutRequest<?>) request;
+
+                                for (Map.Entry<?, ?> entry :
+                                        bunchPutRequest.getBunchValue().entrySet()) {
+                                    byte[] key = bunchPutRequest.buildSerializedKey(entry.getKey());
+                                    byte[] value =
+                                            bunchPutRequest.buildSerializedValue(entry.getValue());
+                                    writeBatch.put(cf, key, value);
+                                }
                             }
                         }
-                        db.write(writeOptions, writeBatch);
+                        writeBatch.flush();
                         for (ForStDBPutRequest<?, ?> request : batchRequest) {
                             request.completeStateFuture();
                         }

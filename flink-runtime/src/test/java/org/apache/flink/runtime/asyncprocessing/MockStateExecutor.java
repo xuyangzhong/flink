@@ -37,7 +37,8 @@ public class MockStateExecutor implements StateExecutor {
     }
 
     @Override
-    public StateRequestContainer createStateRequestContainer() {
+    public StateRequestContainer createStateRequestContainer(
+            StateRequestHandler stateRequestHandler) {
         return new MockStateRequestContainer();
     }
 
