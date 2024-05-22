@@ -25,7 +25,6 @@ import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.core.state.StateFutureImpl.AsyncFrameworkExceptionHandler;
 import org.apache.flink.runtime.asyncprocessing.EpochManager.ParallelMode;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
-import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.function.ThrowingRunnable;
 
 import org.slf4j.Logger;
@@ -77,6 +76,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
      */
     private final MailboxExecutor mailboxExecutor;
 
+    private final BatchCallbackRunner callbackRunner;
+
     /** Exception handler to handle the exception thrown by asynchronous framework. */
     private final AsyncFrameworkExceptionHandler exceptionHandler;
 
@@ -115,6 +116,10 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
      */
     final ParallelMode epochParallelMode = ParallelMode.SERIAL_BETWEEN_EPOCH;
 
+    private final Object notifyLock = new Object();
+
+    private volatile boolean waitingMail = false;
+
     public AsyncExecutionController(
             MailboxExecutor mailboxExecutor,
             AsyncFrameworkExceptionHandler exceptionHandler,
@@ -126,7 +131,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         this.keyAccountingUnit = new KeyAccountingUnit<>(maxInFlightRecords);
         this.mailboxExecutor = mailboxExecutor;
         this.exceptionHandler = exceptionHandler;
-        this.stateFutureFactory = new StateFutureFactory<>(this, mailboxExecutor, exceptionHandler);
+        this.callbackRunner = new BatchCallbackRunner(mailboxExecutor, this::notifyNewMail);
+        this.stateFutureFactory = new StateFutureFactory<>(this, callbackRunner, exceptionHandler);
         this.stateExecutor = stateExecutor;
         this.batchSize = batchSize;
         this.bufferTimeout = bufferTimeout;
@@ -201,9 +207,7 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         RecordContext<K> nextRecordCtx =
                 stateRequestsBuffer.tryActivateOneByKey(toDispose.getKey());
         if (nextRecordCtx != null) {
-            Preconditions.checkState(
-                    tryOccupyKey(nextRecordCtx),
-                    String.format("key(%s) is already occupied.", nextRecordCtx.getKey()));
+            tryOccupyKey(nextRecordCtx);
         }
     }
 
@@ -321,12 +325,34 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             while (inFlightRecordNum.get() > targetNum) {
                 if (!mailboxExecutor.tryYield()) {
                     triggerIfNeeded(true);
-                    Thread.sleep(1);
+                    waitForNewMails();
                 }
             }
-        } catch (InterruptedException ignored) {
+        } catch (Exception ignored) {
             // ignore the interrupted exception to avoid throwing fatal error when the task cancel
             // or exit.
+        }
+    }
+
+    public void waitForNewMails() throws InterruptedException {
+        if (!callbackRunner.isHasMail()) {
+            synchronized (notifyLock) {
+                if (!callbackRunner.isHasMail()) {
+                    waitingMail = true;
+                    notifyLock.wait(1);
+                    waitingMail = false;
+                }
+            }
+        }
+    }
+
+    public void notifyNewMail() {
+        if (waitingMail) {
+            synchronized (notifyLock) {
+                if (waitingMail) {
+                    notifyLock.notify();
+                }
+            }
         }
     }
 

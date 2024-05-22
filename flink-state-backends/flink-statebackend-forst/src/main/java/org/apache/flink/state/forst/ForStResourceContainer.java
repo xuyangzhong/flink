@@ -55,6 +55,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 
+import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_IO_PARALLELISM;
+
 /**
  * The container for ForSt resources, including option factory and shared resource among instances.
  *
@@ -261,6 +263,14 @@ public final class ForStResourceContainer implements AutoCloseable {
     @Nullable
     public URI getRemoteBasePath() {
         return remoteBasePath;
+    }
+
+    public int getIoParallelism() {
+        return configuration.get(EXECUTOR_IO_PARALLELISM);
+    }
+
+    public ReadableConfig getConfiguration() {
+        return configuration;
     }
 
     /**

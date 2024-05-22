@@ -22,20 +22,16 @@ import org.apache.flink.runtime.asyncprocessing.StateExecutor;
 import org.apache.flink.runtime.asyncprocessing.StateRequest;
 import org.apache.flink.runtime.asyncprocessing.StateRequestContainer;
 import org.apache.flink.runtime.asyncprocessing.StateRequestHandler;
-import org.apache.flink.util.FlinkRuntimeException;
 import org.apache.flink.util.Preconditions;
 import org.apache.flink.util.concurrent.ExecutorThreadFactory;
-import org.apache.flink.util.concurrent.FutureUtils;
 
 import org.rocksdb.RocksDB;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -78,51 +74,75 @@ public class ForStStateExecutor implements StateExecutor {
         Preconditions.checkArgument(stateRequestContainer instanceof ForStStateRequestClassifier);
         ForStStateRequestClassifier stateRequestClassifier =
                 (ForStStateRequestClassifier) stateRequestContainer;
-        return CompletableFuture.supplyAsync(
-                () -> {
-                    long startTime = System.currentTimeMillis();
-                    List<CompletableFuture<Void>> futures = new ArrayList<>(2);
-                    List<ForStDBPutRequest<?, ?>> putRequests =
-                            stateRequestClassifier.pollDbPutRequests();
-                    if (!putRequests.isEmpty()) {
-                        ForStWriteBatchOperation writeOperations =
-                                new ForStWriteBatchOperation(
-                                        db, putRequests, writeOptions, workerThreads);
-                        futures.add(writeOperations.process());
-                    }
+        CompletableFuture<Void> resultFuture = new CompletableFuture<>();
 
-                    List<ForStDBGetRequest<?, ?>> getRequests =
-                            stateRequestClassifier.pollDbGetRequests();
-                    if (!getRequests.isEmpty()) {
-                        ForStGeneralMultiGetOperation getOperations =
-                                new ForStGeneralMultiGetOperation(db, getRequests, workerThreads);
-                        futures.add(getOperations.process());
-                    }
+        List<ForStDBPutRequest<?, ?>> putRequests = stateRequestClassifier.pollDbPutRequests();
+        if (!putRequests.isEmpty()) {
+            ForStWriteBatchOperation writeOperations =
+                    new ForStWriteBatchOperation(db, putRequests, writeOptions, workerThreads);
+            writeOperations.process();
+        }
 
-                    List<ForStDBIterRequest<?>> iterRequests =
-                            stateRequestClassifier.pollDbIterRequests();
-                    if (!iterRequests.isEmpty()) {
-                        ForStIterateOperation iterOperations =
-                                new ForStIterateOperation(db, iterRequests, workerThreads);
-                        futures.add(iterOperations.process());
-                    }
+        List<ForStDBGetRequest<?, ?>> getRequests = stateRequestClassifier.pollDbGetRequests();
+        if (!getRequests.isEmpty()) {
+            ForStGeneralMultiGetOperation getOperations =
+                    new ForStGeneralMultiGetOperation(db, getRequests, workerThreads);
+            getOperations.process();
+        }
 
-                    try {
-                        FutureUtils.waitForAll(futures).get();
-                    } catch (InterruptedException | ExecutionException e) {
-                        throw new FlinkRuntimeException(
-                                "Exception when executing ForSt writeBatch or multiGet operation",
-                                e);
-                    }
-                    long duration = System.currentTimeMillis() - startTime;
-                    LOG.debug(
-                            "Complete executing a batch of state requests, putRequest size {}, getRequest size {}, duration {} ms",
-                            putRequests.size(),
-                            getRequests.size(),
-                            duration);
-                    return null;
-                },
-                coordinatorThread);
+        List<ForStDBIterRequest<?>> iterRequests = stateRequestClassifier.pollDbIterRequests();
+        if (!iterRequests.isEmpty()) {
+            ForStIterateOperation iterOperations =
+                    new ForStIterateOperation(db, iterRequests, workerThreads);
+            iterOperations.process();
+        }
+
+        //        coordinatorThread.execute(
+        //                () -> {
+        //                    long startTime = System.currentTimeMillis();
+        //                    List<CompletableFuture<Void>> futures = new ArrayList<>(2);
+        //                    List<ForStDBPutRequest<?, ?>> putRequests =
+        //                            stateRequestClassifier.pollDbPutRequests();
+        //                    if (!putRequests.isEmpty()) {
+        //                        ForStWriteBatchOperation writeOperations =
+        //                                new ForStWriteBatchOperation(
+        //                                        db, putRequests, writeOptions, workerThreads);
+        //                        futures.add(writeOperations.process());
+        //                    }
+        //
+        //                    List<ForStDBGetRequest<?, ?>> getRequests =
+        //                            stateRequestClassifier.pollDbGetRequests();
+        //                    if (!getRequests.isEmpty()) {
+        //                        ForStGeneralMultiGetOperation getOperations =
+        //                                new ForStGeneralMultiGetOperation(db, getRequests,
+        // workerThreads);
+        //                        futures.add(getOperations.process());
+        //                    }
+        //
+        //                    List<ForStDBIterRequest<?>> iterRequests =
+        //                            stateRequestClassifier.pollDbIterRequests();
+        //                    if (!iterRequests.isEmpty()) {
+        //                        ForStIterateOperation iterOperations =
+        //                                new ForStIterateOperation(db, iterRequests,
+        // workerThreads);
+        //                        futures.add(iterOperations.process());
+        //                    }
+        //                    FutureUtils.combineAll(futures)
+        //                            .thenAcceptAsync(
+        //                                    (e) -> {
+        //                                        long duration = System.currentTimeMillis() -
+        // startTime;
+        //                                        LOG.debug(
+        //                                                "Complete executing a batch of state
+        // requests, putRequest size {}, getRequest size {}, duration {} ms",
+        //                                                putRequests.size(),
+        //                                                getRequests.size(),
+        //                                                duration);
+        //                                        resultFuture.complete(null);
+        //                                    },
+        //                                    coordinatorThread);
+        //                });
+        return resultFuture;
     }
 
     @Override

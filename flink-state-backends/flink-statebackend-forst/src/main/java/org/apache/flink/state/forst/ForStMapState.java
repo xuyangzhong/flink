@@ -165,15 +165,10 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
     @SuppressWarnings("rawtypes")
     public ForStDBPutRequest<ContextKey<K>, UV> buildDBPutRequest(
             StateRequest<?, ?, ?> stateRequest) {
-        Preconditions.checkArgument(
-                stateRequest.getRequestType() == StateRequestType.MAP_PUT
-                        || stateRequest.getRequestType() == StateRequestType.MAP_REMOVE);
         ContextKey<K> contextKey =
                 new ContextKey<>(
                         (RecordContext<K>) stateRequest.getRecordContext(),
                         ((Tuple2<UK, UV>) stateRequest.getPayload()).f0);
-        Preconditions.checkNotNull(
-                stateRequest.getPayload(), String.format("payload is null, %s", stateRequest));
         UV value = null;
         if (stateRequest.getRequestType() == StateRequestType.MAP_PUT) {
             value = ((Tuple2<UK, UV>) stateRequest.getPayload()).f1;
@@ -193,9 +188,6 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
     @SuppressWarnings("rawtypes")
     public ForStDBBunchPutRequest<ContextKey<K>> buildDBBunchPutRequest(
             StateRequest<?, ?, ?> stateRequest) {
-        Preconditions.checkArgument(
-                stateRequest.getRequestType() == StateRequestType.MAP_PUT_ALL
-                        || stateRequest.getRequestType() == StateRequestType.CLEAR);
         ContextKey<K> contextKey =
                 new ContextKey<>((RecordContext<K>) stateRequest.getRecordContext(), null);
         Map<UK, UV> value = (Map<UK, UV>) stateRequest.getPayload();

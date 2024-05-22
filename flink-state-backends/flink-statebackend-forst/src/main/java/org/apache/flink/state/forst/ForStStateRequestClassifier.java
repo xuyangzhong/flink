@@ -54,7 +54,7 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
 
     @Override
     public boolean isEmpty() {
-        return dbGetRequests.isEmpty() && dbPutRequests.isEmpty();
+        return dbGetRequests.isEmpty() && dbPutRequests.isEmpty() && dbIterRequests.isEmpty();
     }
 
     @SuppressWarnings("ConstantConditions")
