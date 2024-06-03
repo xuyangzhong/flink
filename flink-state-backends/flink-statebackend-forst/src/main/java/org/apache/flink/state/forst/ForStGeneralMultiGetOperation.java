@@ -18,6 +18,7 @@
 
 package org.apache.flink.state.forst;
 
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksIterator;
 import org.slf4j.Logger;
@@ -61,11 +62,13 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
             ForStDBGetRequest<?, ?> request = batchRequest.get(i);
             executor.execute(
                     () -> {
+                        ReadOptions readOptions = new ReadOptions();
+                        readOptions.setReadaheadSize(0);
                         RocksIterator iter = null;
                         try {
                             byte[] key = request.buildSerializedKey();
                             if (request.checkMapEmpty()) {
-                                iter = db.newIterator(request.getColumnFamilyHandle());
+                                iter = db.newIterator(request.getColumnFamilyHandle(), readOptions);
                                 iter.seek(key);
                                 if (iter.isValid()
                                         && startWithKeyPrefix(
@@ -77,7 +80,8 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
                                     request.completeStateFuture(null);
                                 }
                             } else {
-                                byte[] value = db.get(request.getColumnFamilyHandle(), key);
+                                byte[] value =
+                                        db.get(request.getColumnFamilyHandle(), readOptions, key);
                                 request.completeStateFuture(value);
                             }
                         } catch (Exception e) {

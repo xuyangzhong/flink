@@ -164,6 +164,9 @@ public final class RocksDBResourceContainer implements AutoCloseable {
             handlesToClose.add(statistics);
         }
 
+        opt.setStatsDumpPeriodSec(60);
+        opt.setUseDirectReads(true);
+        opt.setUseDirectIoForFlushAndCompaction(true);
         return opt;
     }
 

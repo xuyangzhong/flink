@@ -135,6 +135,9 @@ public class ForStKeyedStateBackend<K> implements AsyncKeyedStateBackend {
         ColumnFamilyHandle columnFamilyHandle =
                 ForStOperationUtils.createColumnFamilyHandle(
                         stateDesc.getStateId(), db, columnFamilyOptionsFactory);
+        if (nativeMetricMonitor != null) {
+            nativeMetricMonitor.registerColumnFamily(stateDesc.getStateId(), columnFamilyHandle);
+        }
         if (stateDesc.getType() == StateDescriptor.Type.VALUE) {
             return (S)
                     new ForStValueState<>(
@@ -164,7 +167,10 @@ public class ForStKeyedStateBackend<K> implements AsyncKeyedStateBackend {
     @Nonnull
     public StateExecutor createStateExecutor() {
         return new ForStStateExecutor(
-                optionsContainer.getIoParallelism(), db, optionsContainer.getWriteOptions());
+                optionsContainer.getIoParallelism(),
+                optionsContainer.getWriteIoParallelism(),
+                db,
+                optionsContainer.getWriteOptions());
     }
 
     /** Should only be called by one thread, and only after all accesses to the DB happened. */

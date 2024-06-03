@@ -184,6 +184,7 @@ public class ForStStateBackend extends AbstractManagedMemoryStateBackend
                 }
             }
         }
+        LOG.info("forst config {}", config);
 
         // configure metric options
         this.nativeMetricOptions = ForStNativeMetricOptions.fromConfig(config);

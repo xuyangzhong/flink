@@ -99,6 +99,7 @@ public class ForStNativeMetricMonitor implements Closeable {
                         : metricGroup.addGroup(columnFamilyName);
 
         for (ForStProperty property : options.getProperties()) {
+            LOG.info("Registering native metric {} for column family.", property);
             ForStNativePropertyMetricView gauge =
                     new ForStNativePropertyMetricView(handle, property);
             group.gauge(property.getForStProperty(), gauge);

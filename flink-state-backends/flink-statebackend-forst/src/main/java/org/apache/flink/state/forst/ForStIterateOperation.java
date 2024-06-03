@@ -20,6 +20,7 @@ package org.apache.flink.state.forst;
 
 import org.apache.flink.runtime.asyncprocessing.StateRequestType;
 
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksIterator;
 import org.slf4j.Logger;
@@ -64,7 +65,11 @@ public class ForStIterateOperation implements ForStDBOperation {
             executor.execute(
                     () -> {
                         // todo: config read options
-                        try (RocksIterator iter = db.newIterator(request.getColumnFamilyHandle())) {
+                        ReadOptions readOptions = new ReadOptions();
+                        readOptions.setBackgroundPurgeOnIteratorCleanup(true);
+                        readOptions.setReadaheadSize(0);
+                        try (RocksIterator iter =
+                                db.newIterator(request.getColumnFamilyHandle(), readOptions)) {
                             byte[] prefix = request.getKeyPrefixBytes();
                             int userKeyOffset = prefix.length;
                             if (request.getToSeekBytes() != null) {

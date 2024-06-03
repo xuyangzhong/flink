@@ -45,7 +45,8 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
     @Test
     @SuppressWarnings("unchecked")
     void testExecuteValueStateRequest() throws Exception {
-        ForStStateExecutor forStStateExecutor = new ForStStateExecutor(4, db, new WriteOptions());
+        ForStStateExecutor forStStateExecutor =
+                new ForStStateExecutor(4, 1, db, new WriteOptions());
         ForStValueState<Integer, String> state1 = buildForStValueState("value-state-1");
         ForStValueState<Integer, String> state2 = buildForStValueState("value-state-2");
 
@@ -126,7 +127,8 @@ class ForStStateExecutorTest extends ForStDBOperationTestBase {
 
     @Test
     void testExecuteMapStateRequest() throws Exception {
-        ForStStateExecutor forStStateExecutor = new ForStStateExecutor(4, db, new WriteOptions());
+        ForStStateExecutor forStStateExecutor =
+                new ForStStateExecutor(4, 1, db, new WriteOptions());
         ForStMapState<Integer, String, String> state = buildForStMapState("map-state");
         StateRequestContainer stateRequestContainer =
                 forStStateExecutor.createStateRequestContainer(null);

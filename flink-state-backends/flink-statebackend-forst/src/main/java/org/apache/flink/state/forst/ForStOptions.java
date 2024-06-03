@@ -137,4 +137,11 @@ public class ForStOptions {
                     .defaultValue(4)
                     .withDescription(
                             "The number of threads used for IO operations in the executor.");
+
+    public static final ConfigOption<Integer> EXECUTOR_WRITE_IO_PARALLELISM =
+            ConfigOptions.key("state.backend.forst.memory.executor-write-io-parallelism")
+                    .intType()
+                    .defaultValue(4)
+                    .withDescription(
+                            "The number of threads used for IO operations in the executor.");
 }

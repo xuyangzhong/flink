@@ -56,6 +56,7 @@ import java.util.Arrays;
 import java.util.Collection;
 
 import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_IO_PARALLELISM;
+import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_WRITE_IO_PARALLELISM;
 
 /**
  * The container for ForSt resources, including option factory and shared resource among instances.
@@ -175,6 +176,12 @@ public final class ForStResourceContainer implements AutoCloseable {
             opt.setEnv(new FlinkEnv(remoteForStPath.toString()));
         }
 
+        opt.setStatsDumpPeriodSec(60);
+        opt.setUseDirectReads(true);
+        opt.setUseDirectIoForFlushAndCompaction(true);
+        opt.setAvoidUnnecessaryBlockingIO(true);
+        opt.setAdviseRandomOnOpen(false);
+
         return opt;
     }
 
@@ -267,6 +274,10 @@ public final class ForStResourceContainer implements AutoCloseable {
 
     public int getIoParallelism() {
         return configuration.get(EXECUTOR_IO_PARALLELISM);
+    }
+
+    public int getWriteIoParallelism() {
+        return configuration.get(EXECUTOR_WRITE_IO_PARALLELISM);
     }
 
     public ReadableConfig getConfiguration() {
@@ -473,6 +484,9 @@ public final class ForStResourceContainer implements AutoCloseable {
         blockBasedTableConfig.setMetadataBlockSize(
                 internalGetOption(ForStConfigurableOptions.METADATA_BLOCK_SIZE).getBytes());
 
+        LOG.info(
+                "Block cache size: {}.",
+                internalGetOption(ForStConfigurableOptions.BLOCK_CACHE_SIZE));
         blockBasedTableConfig.setBlockCacheSize(
                 internalGetOption(ForStConfigurableOptions.BLOCK_CACHE_SIZE).getBytes());
 
