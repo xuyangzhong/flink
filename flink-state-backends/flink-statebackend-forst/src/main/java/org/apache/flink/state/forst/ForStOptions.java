@@ -144,4 +144,10 @@ public class ForStOptions {
                     .defaultValue(4)
                     .withDescription(
                             "The number of threads used for IO operations in the executor.");
+
+    public static final ConfigOption<Boolean> CLOSE_COMPRESSION =
+            ConfigOptions.key("state.backend.forst.memory.close-compression")
+                    .booleanType()
+                    .defaultValue(false)
+                    .withDescription("");
 }

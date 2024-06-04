@@ -32,6 +32,8 @@ import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
 import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.CompressionOptions;
+import org.rocksdb.CompressionType;
 import org.rocksdb.DBOptions;
 import org.rocksdb.Filter;
 import org.rocksdb.FlinkEnv;
@@ -54,7 +56,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 
+import static org.apache.flink.state.forst.ForStOptions.CLOSE_COMPRESSION;
 import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_IO_PARALLELISM;
 import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_WRITE_IO_PARALLELISM;
 
@@ -225,6 +229,9 @@ public final class ForStResourceContainer implements AutoCloseable {
             blockBasedTableConfig.setCacheIndexAndFilterBlocksWithHighPriority(true);
             blockBasedTableConfig.setPinL0FilterAndIndexBlocksInCache(true);
             opt.setTableFormatConfig(blockBasedTableConfig);
+        }
+        if (configuration.getOptional(CLOSE_COMPRESSION).orElse(false)) {
+            opt.setCompressionOptions(new CompressionOptions().setEnabled(false));
         }
 
         return opt;
@@ -442,8 +449,13 @@ public final class ForStResourceContainer implements AutoCloseable {
         currentOptions.setCompactionStyle(
                 internalGetOption(ForStConfigurableOptions.COMPACTION_STYLE));
 
-        currentOptions.setCompressionPerLevel(
-                internalGetOption(ForStConfigurableOptions.COMPRESSION_PER_LEVEL));
+        if (configuration.getOptional(CLOSE_COMPRESSION).orElse(false)) {
+            currentOptions.setCompressionPerLevel(
+                    Collections.singletonList(CompressionType.NO_COMPRESSION));
+        } else {
+            currentOptions.setCompressionPerLevel(
+                    internalGetOption(ForStConfigurableOptions.COMPRESSION_PER_LEVEL));
+        }
 
         currentOptions.setLevelCompactionDynamicLevelBytes(
                 internalGetOption(ForStConfigurableOptions.USE_DYNAMIC_LEVEL_SIZE));

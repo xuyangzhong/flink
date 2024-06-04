@@ -63,8 +63,7 @@ public class ForStStateExecutor implements StateExecutor {
     public ForStStateExecutor(
             int ioParallelism, int writeThread, RocksDB db, WriteOptions writeOptions) {
         this.coordinatorThread =
-                Executors.newSingleThreadScheduledExecutor(
-                        new ExecutorThreadFactory("ForSt-Coordinator"));
+                Executors.newSingleThreadExecutor(new ExecutorThreadFactory("ForSt-Coordinator"));
         this.workerThreads =
                 Executors.newFixedThreadPool(
                         ioParallelism, new ExecutorThreadFactory("ForSt-worker-IO"));

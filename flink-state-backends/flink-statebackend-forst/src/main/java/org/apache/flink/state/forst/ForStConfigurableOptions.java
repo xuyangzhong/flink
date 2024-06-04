@@ -38,6 +38,7 @@ import java.util.Set;
 import static org.apache.flink.configuration.ConfigOptions.key;
 import static org.apache.flink.configuration.description.LinkElement.link;
 import static org.apache.flink.configuration.description.TextElement.code;
+import static org.apache.flink.state.forst.ForStOptions.CLOSE_COMPRESSION;
 import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_IO_PARALLELISM;
 import static org.apache.flink.state.forst.ForStOptions.EXECUTOR_WRITE_IO_PARALLELISM;
 import static org.apache.flink.state.forst.ForStOptions.USE_PARTITIONED_INDEX_FILTERS;
@@ -307,6 +308,7 @@ public class ForStConfigurableOptions implements Serializable {
             new ConfigOption<?>[] {
                 EXECUTOR_IO_PARALLELISM,
                 EXECUTOR_WRITE_IO_PARALLELISM,
+                CLOSE_COMPRESSION,
                 USE_PARTITIONED_INDEX_FILTERS,
                 // configurable DBOptions
                 MAX_BACKGROUND_THREADS,
