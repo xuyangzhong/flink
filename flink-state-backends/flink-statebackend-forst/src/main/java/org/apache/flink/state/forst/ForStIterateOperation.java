@@ -49,10 +49,18 @@ public class ForStIterateOperation implements ForStDBOperation {
 
     private final Executor executor;
 
+    private final int poolSize;
+
     ForStIterateOperation(RocksDB db, List<ForStDBIterRequest<?>> batchRequest, Executor executor) {
+        this(db, batchRequest, executor, 1);
+    }
+
+    ForStIterateOperation(
+            RocksDB db, List<ForStDBIterRequest<?>> batchRequest, Executor executor, int poolSize) {
         this.db = db;
         this.batchRequest = batchRequest;
         this.executor = executor;
+        this.poolSize = poolSize;
     }
 
     @Override
@@ -60,102 +68,113 @@ public class ForStIterateOperation implements ForStDBOperation {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         AtomicInteger counter = new AtomicInteger(batchRequest.size());
-        for (int i = 0; i < batchRequest.size(); i++) {
-            ForStDBIterRequest<?> request = batchRequest.get(i);
+
+        int step = Math.max(1, Math.min(10, batchRequest.size() / poolSize));
+        for (int i = 0; i < batchRequest.size(); ) {
+            ArrayList<ForStDBIterRequest<?>> requests = new ArrayList<>(step);
+            for (int j = 0; j < step && i < batchRequest.size(); j++, i++) {
+                requests.add(batchRequest.get(i));
+            }
+
             executor.execute(
                     () -> {
                         // todo: config read options
                         ReadOptions readOptions = new ReadOptions();
                         readOptions.setBackgroundPurgeOnIteratorCleanup(true);
                         readOptions.setReadaheadSize(0);
-                        try (RocksIterator iter =
-                                db.newIterator(request.getColumnFamilyHandle(), readOptions)) {
-                            byte[] prefix = request.getKeyPrefixBytes();
-                            int userKeyOffset = prefix.length;
-                            if (request.getToSeekBytes() != null) {
-                                iter.seek(request.getToSeekBytes());
-                            } else {
-                                iter.seek(prefix);
-                            }
-                            List<RawEntry> entries = new ArrayList<>(CACHE_SIZE_LIMIT);
-                            boolean encounterEnd = false;
-                            byte[] nextSeek = prefix;
-                            while (iter.isValid() && entries.size() < CACHE_SIZE_LIMIT) {
-                                byte[] key = iter.key();
-                                if (startWithKeyPrefix(
-                                        prefix, key, request.getKeyGroupPrefixBytes())) {
-                                    entries.add(new RawEntry(key, iter.value()));
-                                    nextSeek = key;
+                        for (ForStDBIterRequest<?> request : requests) {
+                            try (RocksIterator iter =
+                                    db.newIterator(request.getColumnFamilyHandle(), readOptions)) {
+                                byte[] prefix = request.getKeyPrefixBytes();
+                                int userKeyOffset = prefix.length;
+                                if (request.getToSeekBytes() != null) {
+                                    iter.seek(request.getToSeekBytes());
                                 } else {
-                                    encounterEnd = true;
-                                    break;
+                                    iter.seek(prefix);
                                 }
-                                iter.next();
-                            }
-                            if (iter.isValid()) {
-                                nextSeek = iter.key();
-                            }
-                            if (entries.size() < CACHE_SIZE_LIMIT) {
-                                encounterEnd = true;
-                            }
-                            Collection<Object> deserializedEntries =
-                                    new ArrayList<>(entries.size());
-                            switch (request.getResultType()) {
-                                case KEY:
-                                    {
-                                        for (RawEntry en : entries) {
-                                            deserializedEntries.add(
-                                                    request.deserializeUserKey(
-                                                            en.rawKeyBytes, userKeyOffset));
-                                        }
+                                List<RawEntry> entries = new ArrayList<>(CACHE_SIZE_LIMIT);
+                                boolean encounterEnd = false;
+                                byte[] nextSeek = prefix;
+                                while (iter.isValid() && entries.size() < CACHE_SIZE_LIMIT) {
+                                    byte[] key = iter.key();
+                                    if (startWithKeyPrefix(
+                                            prefix, key, request.getKeyGroupPrefixBytes())) {
+                                        entries.add(new RawEntry(key, iter.value()));
+                                        nextSeek = key;
+                                    } else {
+                                        encounterEnd = true;
                                         break;
                                     }
-                                case VALUE:
-                                    {
-                                        for (RawEntry en : entries) {
-                                            deserializedEntries.add(
-                                                    request.deserializeUserValue(en.rawValueBytes));
+                                    iter.next();
+                                }
+                                if (iter.isValid()) {
+                                    nextSeek = iter.key();
+                                }
+                                if (entries.size() < CACHE_SIZE_LIMIT) {
+                                    encounterEnd = true;
+                                }
+                                Collection<Object> deserializedEntries =
+                                        new ArrayList<>(entries.size());
+                                switch (request.getResultType()) {
+                                    case KEY:
+                                        {
+                                            for (RawEntry en : entries) {
+                                                deserializedEntries.add(
+                                                        request.deserializeUserKey(
+                                                                en.rawKeyBytes, userKeyOffset));
+                                            }
+                                            break;
                                         }
-                                        break;
-                                    }
-                                case ENTRY:
-                                    {
-                                        for (RawEntry en : entries) {
-                                            deserializedEntries.add(
-                                                    new MapEntry(
-                                                            request.deserializeUserKey(
-                                                                    en.rawKeyBytes, userKeyOffset),
-                                                            request.deserializeUserValue(
-                                                                    en.rawValueBytes)));
+                                    case VALUE:
+                                        {
+                                            for (RawEntry en : entries) {
+                                                deserializedEntries.add(
+                                                        request.deserializeUserValue(
+                                                                en.rawValueBytes));
+                                            }
+                                            break;
                                         }
-                                        break;
-                                    }
-                                default:
-                                    throw new IllegalStateException(
-                                            "Unknown result type: " + request.getResultType());
-                            }
-                            ForStMapIterator stateIterator =
-                                    new ForStMapIterator<>(
-                                            request.getState(),
-                                            request.getResultType(),
-                                            StateRequestType.ITERATOR_LOADING,
-                                            request.getStateRequestHandler(),
-                                            deserializedEntries,
-                                            encounterEnd,
-                                            nextSeek);
+                                    case ENTRY:
+                                        {
+                                            for (RawEntry en : entries) {
+                                                deserializedEntries.add(
+                                                        new MapEntry(
+                                                                request.deserializeUserKey(
+                                                                        en.rawKeyBytes,
+                                                                        userKeyOffset),
+                                                                request.deserializeUserValue(
+                                                                        en.rawValueBytes)));
+                                            }
+                                            break;
+                                        }
+                                    default:
+                                        throw new IllegalStateException(
+                                                "Unknown result type: " + request.getResultType());
+                                }
+                                ForStMapIterator stateIterator =
+                                        new ForStMapIterator<>(
+                                                request.getState(),
+                                                request.getResultType(),
+                                                StateRequestType.ITERATOR_LOADING,
+                                                request.getStateRequestHandler(),
+                                                deserializedEntries,
+                                                encounterEnd,
+                                                nextSeek);
 
-                            request.completeStateFuture(stateIterator);
-                        } catch (Exception e) {
-                            LOG.warn("Error when process iterate operation for forStDB", e);
-                            future.completeExceptionally(e);
-                        } finally {
-                            if (counter.decrementAndGet() == 0
-                                    && !future.isCompletedExceptionally()) {
-                                future.complete(null);
+                                request.completeStateFuture(stateIterator);
+                            } catch (Exception e) {
+                                LOG.warn("Error when process iterate operation for forStDB", e);
+                                future.completeExceptionally(e);
+                            } finally {
+                                if (counter.decrementAndGet() == 0
+                                        && !future.isCompletedExceptionally()) {
+                                    future.complete(null);
+                                }
                             }
                         }
                     });
         }
+
         return future;
     }
 

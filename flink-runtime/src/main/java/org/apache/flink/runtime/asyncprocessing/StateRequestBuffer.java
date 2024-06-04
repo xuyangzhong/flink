@@ -31,7 +31,6 @@ import java.util.Optional;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -133,16 +132,18 @@ public class StateRequestBuffer<K> {
                 }
                 final long thisScheduledSeq = currentSeq.get();
                 scheduledSeq.set(thisScheduledSeq);
-                currentScheduledFuture =
-                        (ScheduledFuture<Void>)
-                                scheduledExecutor.schedule(
-                                        () -> {
-                                            if (thisScheduledSeq == currentSeq.get()) {
-                                                timeoutHandler.accept(thisScheduledSeq);
-                                            }
-                                        },
-                                        bufferTimeout,
-                                        TimeUnit.MILLISECONDS);
+                //                currentScheduledFuture =
+                //                        (ScheduledFuture<Void>)
+                //                                scheduledExecutor.schedule(
+                //                                        () -> {
+                //                                            if (thisScheduledSeq ==
+                // currentSeq.get()) {
+                //
+                // timeoutHandler.accept(thisScheduledSeq);
+                //                                            }
+                //                                        },
+                //                                        bufferTimeout,
+                //                                        TimeUnit.MILLISECONDS);
             }
         }
     }

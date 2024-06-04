@@ -25,24 +25,13 @@ import org.apache.flink.api.java.utils.ParameterTool;
 import org.apache.flink.configuration.ConfigOption;
 import org.apache.flink.configuration.ConfigOptions;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.contrib.streaming.state.DefaultConfigurableOptionsFactory;
-import org.apache.flink.contrib.streaming.state.RocksDBStateBackend;
-import org.apache.flink.runtime.state.StateBackend;
-import org.apache.flink.runtime.state.filesystem.FsStateBackend;
-import org.apache.flink.runtime.state.memory.MemoryStateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
 import org.apache.flink.streaming.api.environment.CheckpointConfig;
 import org.apache.flink.streaming.api.environment.StreamExecutionEnvironment;
 
-import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.CompressionType;
-import org.rocksdb.DBOptions;
-import org.rocksdb.Statistics;
-import org.rocksdb.StatsLevel;
 
-import java.io.IOException;
 import java.time.Duration;
-import java.util.Collection;
 
 /** Configurations for the job. */
 public class JobConfig {
@@ -150,65 +139,5 @@ public class JobConfig {
         env.getCheckpointConfig()
                 .enableExternalizedCheckpoints(
                         CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);
-    }
-
-    public static void setStateBackend(StreamExecutionEnvironment env, Configuration configuration)
-            throws IOException {
-
-        if (configuration.getString(STATE_BACKEND) == null) {
-            return;
-        }
-
-        StateBackendType stateBackendType =
-                StateBackendType.valueOf(configuration.getString(STATE_BACKEND).toUpperCase());
-
-        String checkpointPath = configuration.getString(CHECKPOINT_PATH);
-        StateBackend stateBackend;
-        switch (stateBackendType) {
-            case FS:
-                stateBackend = new FsStateBackend(checkpointPath);
-                break;
-            case ROCKSDB:
-                RocksDBStateBackend rocksdbStateBackend = new RocksDBStateBackend(checkpointPath);
-                rocksdbStateBackend.setRocksDBOptions(
-                        new DefaultConfigurableOptionsFactory() {
-                            @Override
-                            public DBOptions createDBOptions(
-                                    DBOptions dbOptions, Collection<AutoCloseable> collection) {
-                                super.createDBOptions(dbOptions, collection);
-
-                                if (configuration.getBoolean(ROCKSDB_STATS)) {
-                                    Statistics statistics = new Statistics();
-                                    statistics.setStatsLevel(StatsLevel.EXCEPT_DETAILED_TIMERS);
-                                    dbOptions.setStatistics(statistics);
-                                }
-                                dbOptions.setStatsDumpPeriodSec(60);
-                                dbOptions.setAllowConcurrentMemtableWrite(false);
-                                return dbOptions;
-                            }
-
-                            @Override
-                            public ColumnFamilyOptions createColumnOptions(
-                                    ColumnFamilyOptions currentOptions,
-                                    Collection<AutoCloseable> collection) {
-                                super.createColumnOptions(currentOptions, collection);
-
-                                CompressionType compressionType =
-                                        CompressionType.valueOf(
-                                                configuration
-                                                        .getString(ROCKSDB_COMPRESS)
-                                                        .toUpperCase());
-                                currentOptions.setCompressionType(compressionType);
-                                return currentOptions;
-                            }
-                        });
-                stateBackend = rocksdbStateBackend;
-                break;
-            case MEMORY:
-            default:
-                stateBackend = new MemoryStateBackend();
-        }
-
-        env.setStateBackend(stateBackend);
     }
 }
