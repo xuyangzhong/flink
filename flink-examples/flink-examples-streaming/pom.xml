@@ -215,6 +215,30 @@ under the License.
 						</configuration>
 					</execution>
 
+					<!-- AsyncWordCount -->
+					<execution>
+						<id>AsyncWordCount</id>
+						<phase>package</phase>
+						<goals>
+							<goal>jar</goal>
+						</goals>
+						<configuration>
+							<classifier>AsyncWordCount</classifier>
+
+							<archive>
+								<manifestEntries>
+									<program-class>org.apache.flink.streaming.examples.wordcountasync.WordCount</program-class>
+								</manifestEntries>
+							</archive>
+
+							<includes>
+								<include>org/apache/flink/streaming/examples/wordcountasync/*</include>
+								<include>META-INF/LICENSE</include>
+								<include>META-INF/NOTICE</include>
+							</includes>
+						</configuration>
+					</execution>
+
 					<!-- SocketWindowWordCount -->
 					<execution>
 						<id>SocketWindowWordCount</id>

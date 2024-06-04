@@ -96,7 +96,8 @@ class AsyncExecutionControllerTest {
                         128,
                         batchSize,
                         timeout,
-                        maxInFlight);
+                        maxInFlight,
+                        null);
         asyncKeyedStateBackend.setup(aec);
 
         try {

@@ -78,6 +78,10 @@ public class ForStGeneralMultiGetOperation implements ForStDBOperation {
                 },
                 executor);
 
+        //        CompletableFuture<Void> future = new CompletableFuture<>();
+        //
+        //        AtomicInteger counter = new AtomicInteger(batchRequest.size());
+        //
         //        for (int i = 0; i < batchRequest.size(); i++) {
         //            ForStDBGetRequest<?, ?> request = batchRequest.get(i);
         //            executor.execute(

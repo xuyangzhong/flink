@@ -23,6 +23,7 @@ import org.apache.flink.api.common.operators.MailboxExecutor;
 import org.apache.flink.api.common.state.v2.State;
 import org.apache.flink.core.state.InternalStateFuture;
 import org.apache.flink.core.state.StateFutureImpl.AsyncFrameworkExceptionHandler;
+import org.apache.flink.metrics.MetricGroup;
 import org.apache.flink.runtime.asyncprocessing.EpochManager.ParallelMode;
 import org.apache.flink.runtime.state.KeyGroupRangeAssignment;
 import org.apache.flink.util.function.ThrowingRunnable;
@@ -127,7 +128,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             int maxParallelism,
             int batchSize,
             long bufferTimeout,
-            int maxInFlightRecords) {
+            int maxInFlightRecords,
+            @Nullable MetricGroup metricGroup) {
         this.keyAccountingUnit = new KeyAccountingUnit<>(maxInFlightRecords);
         this.mailboxExecutor = mailboxExecutor;
         this.exceptionHandler = exceptionHandler;
@@ -152,6 +154,14 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
                                         "AEC-buffer-timeout"));
 
         this.epochManager = new EpochManager(this);
+
+        if (metricGroup != null) {
+            metricGroup.gauge("AEC-inFlightRecordNum", inFlightRecordNum::get);
+            metricGroup.gauge("AEC-activeBuffer", () -> stateRequestsBuffer.activeQueueSize());
+            metricGroup.gauge("AEC-blockingBuffer", () -> stateRequestsBuffer.blockingQueueSize());
+            metricGroup.gauge("AEC-KAU", () -> keyAccountingUnit.size());
+        }
+
         LOG.info(
                 "Create AsyncExecutionController: batchSize {}, bufferTimeout {}, maxInFlightRecordNum {}, epochParallelMode {}",
                 this.batchSize,

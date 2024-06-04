@@ -181,10 +181,10 @@ public final class ForStResourceContainer implements AutoCloseable {
         }
 
         opt.setStatsDumpPeriodSec(60);
-        opt.setUseDirectReads(true);
-        opt.setUseDirectIoForFlushAndCompaction(true);
-        opt.setAvoidUnnecessaryBlockingIO(true);
-        opt.setAdviseRandomOnOpen(false);
+        // opt.setUseDirectReads(true);
+        // opt.setUseDirectIoForFlushAndCompaction(true);
+        // opt.setAvoidUnnecessaryBlockingIO(true);
+        // opt.setAdviseRandomOnOpen(false);
 
         return opt;
     }

@@ -69,7 +69,8 @@ public class InternalKeyedStateTestBase {
                         1,
                         1,
                         1000,
-                        1);
+                        1,
+                        null);
         exception = new AtomicReference<>(null);
     }
 

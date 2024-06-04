@@ -62,4 +62,8 @@ public class KeyAccountingUnit<K> {
     public int occupiedCount() {
         return noConflictInFlightRecords.size();
     }
+
+    public int size() {
+        return noConflictInFlightRecords.size();
+    }
 }

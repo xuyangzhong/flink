@@ -91,7 +91,8 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
                             maxParallelism,
                             asyncBufferSize,
                             asyncBufferTimeout,
-                            inFlightRecordsLimit);
+                            inFlightRecordsLimit,
+                            environment.getMetricGroup());
             asyncKeyedStateBackend.setup(asyncExecutionController);
         } else if (stateHandler.getKeyedStateBackend() != null) {
             throw new UnsupportedOperationException(
