@@ -85,12 +85,6 @@ public class ForStStateExecutor implements StateExecutor {
         CompletableFuture<Void> resultFuture = new CompletableFuture<>();
 
         List<CompletableFuture<Void>> futures = new ArrayList<>(3);
-        List<ForStDBPutRequest<?, ?>> putRequests = stateRequestClassifier.pollDbPutRequests();
-        if (!putRequests.isEmpty()) {
-            ForStWriteBatchOperation writeOperations =
-                    new ForStWriteBatchOperation(db, putRequests, writeOptions, writeThreads);
-            futures.add(writeOperations.process());
-        }
 
         List<ForStDBGetRequest<?, ?>> getRequests = stateRequestClassifier.pollDbGetRequests();
         if (!getRequests.isEmpty()) {
@@ -104,6 +98,14 @@ public class ForStStateExecutor implements StateExecutor {
             ForStIterateOperation iterOperations =
                     new ForStIterateOperation(db, iterRequests, workerThreads);
             futures.add(iterOperations.process());
+        }
+
+        List<ForStDBPutRequest<?, ?>> putRequests = stateRequestClassifier.pollDbPutRequests();
+        if (!putRequests.isEmpty()) {
+            ForStWriteBatchOperation writeOperations =
+                    new ForStWriteBatchOperation(
+                            db, putRequests, writeOptions, Executors.directExecutor());
+            futures.add(writeOperations.process());
         }
 
         return resultFuture;
