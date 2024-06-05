@@ -57,6 +57,11 @@ public class ForStStateRequestClassifier implements StateRequestContainer {
         return dbGetRequests.isEmpty() && dbPutRequests.isEmpty() && dbIterRequests.isEmpty();
     }
 
+    @Override
+    public int size() {
+        return dbGetRequests.size() + dbPutRequests.size() + dbIterRequests.size();
+    }
+
     @SuppressWarnings("ConstantConditions")
     private void convertStateRequestsToForStDBRequests(StateRequest<?, ?, ?> stateRequest) {
         StateRequestType stateRequestType = stateRequest.getRequestType();

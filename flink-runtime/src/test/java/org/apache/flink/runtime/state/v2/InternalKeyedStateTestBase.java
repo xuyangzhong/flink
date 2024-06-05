@@ -194,6 +194,11 @@ public class InternalKeyedStateTestBase {
             public boolean isEmpty() {
                 return requests.isEmpty();
             }
+
+            @Override
+            public int size() {
+                return requests.size();
+            }
         }
     }
 }

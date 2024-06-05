@@ -67,13 +67,16 @@ public class ForStDBIterRequest<T> {
     /** The bytes to seek to. If null, seek start from the {@link #getKeyPrefixBytes}. */
     private final byte[] toSeekBytes;
 
+    private Runnable disposer;
+
     public ForStDBIterRequest(
             ResultType type,
             ContextKey contextKey,
             ForStMapState table,
             StateRequestHandler stateRequestHandler,
             InternalStateFuture<StateIterator<T>> future,
-            byte[] toSeekBytes) {
+            byte[] toSeekBytes,
+            Runnable disposer) {
         this.resultType = type;
         this.contextKey = contextKey;
         this.table = table;
@@ -81,6 +84,7 @@ public class ForStDBIterRequest<T> {
         this.future = future;
         this.keyGroupPrefixBytes = table.getKeyGroupPrefixBytes();
         this.toSeekBytes = toSeekBytes;
+        this.disposer = disposer;
     }
 
     public int getKeyGroupPrefixBytes() {
@@ -123,6 +127,9 @@ public class ForStDBIterRequest<T> {
     }
 
     public void completeStateFuture(StateIterator<T> iterator) throws IOException {
+        if (disposer != null) {
+            disposer.run();
+        }
         future.complete(iterator);
     }
 }

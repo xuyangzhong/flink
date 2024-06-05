@@ -35,6 +35,7 @@ import javax.annotation.Nullable;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * The Async Execution Controller (AEC) receives processing requests from operators, and put them
@@ -121,6 +122,10 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
 
     private volatile boolean waitingMail = false;
 
+    private AtomicLong inFlightRequest;
+
+    private long inFlightRequestSnapshot;
+
     public AsyncExecutionController(
             MailboxExecutor mailboxExecutor,
             AsyncFrameworkExceptionHandler exceptionHandler,
@@ -154,6 +159,8 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
                                         "AEC-buffer-timeout"));
 
         this.epochManager = new EpochManager(this);
+        this.inFlightRequest = new AtomicLong(0);
+        this.inFlightRequestSnapshot = 0;
 
         if (metricGroup != null) {
             metricGroup.gauge("AEC-inFlightRecordNum", inFlightRecordNum::get);
@@ -269,6 +276,11 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
         return stateFuture;
     }
 
+    @Override
+    public Runnable getDisposer() {
+        return () -> inFlightRequest.decrementAndGet();
+    }
+
     <IN, OUT> void insertActiveBuffer(StateRequest<K, IN, OUT> request) {
         stateRequestsBuffer.enqueueToActive(request);
     }
@@ -287,12 +299,18 @@ public class AsyncExecutionController<K> implements StateRequestHandler {
             return;
         }
 
+        if (inFlightRequest.get() > inFlightRequestSnapshot) {
+            return;
+        }
+
         Optional<StateRequestContainer> toRun =
                 stateRequestsBuffer.popActive(
                         batchSize, () -> stateExecutor.createStateRequestContainer(this));
         if (!toRun.isPresent() || toRun.get().isEmpty()) {
             return;
         }
+        inFlightRequest.addAndGet(toRun.get().size());
+        inFlightRequestSnapshot = inFlightRequest.get();
         stateExecutor.executeBatchRequests(toRun.get());
         stateRequestsBuffer.advanceSeq();
     }

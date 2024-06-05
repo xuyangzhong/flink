@@ -44,7 +44,7 @@ class ForStGeneralMultiGetOperationTest extends ForStDBOperationTestBase {
             TestStateFuture<String> future = new TestStateFuture<>();
             ForStValueState<Integer, String> table = ((i % 2 == 0) ? valueState1 : valueState2);
             ForStDBGetRequest<ContextKey<Integer>, String> request =
-                    ForStDBGetRequest.of(buildContextKey(i), table, future);
+                    ForStDBGetRequest.of(buildContextKey(i), table, future, null);
             batchGetRequest.add(request);
 
             String value = (i % 10 != 0 ? String.valueOf(i) : null);
@@ -83,7 +83,7 @@ class ForStGeneralMultiGetOperationTest extends ForStDBOperationTestBase {
             ContextKey<Integer> contextKey = buildContextKey(i);
             contextKey.setUserKey(String.valueOf(i));
             ForStDBGetRequest<ContextKey<Integer>, String> request =
-                    ForStDBGetRequest.of(contextKey, table, future);
+                    ForStDBGetRequest.of(contextKey, table, future, null);
             batchGetRequest.add(request);
 
             String value = (i % 10 != 0 ? String.valueOf(i) : null);
@@ -123,27 +123,27 @@ class ForStGeneralMultiGetOperationTest extends ForStDBOperationTestBase {
         List<ForStDBGetRequest<?, ?>> batchGetRequest = new ArrayList<>();
         ContextKey<Integer> contextKey = buildContextKey(1);
         ForStDBGetRequest<ContextKey<Integer>, String> request1 =
-                ForStDBGetRequest.of(contextKey, mapState, future, true, true);
+                ForStDBGetRequest.of(contextKey, mapState, future, true, true, null);
         batchGetRequest.add(request1);
 
         TestStateFuture<Boolean> future2 = new TestStateFuture<>();
         ContextKey<Integer> contextKey2 = buildContextKey(2);
         ForStDBGetRequest<ContextKey<Integer>, String> request2 =
-                ForStDBGetRequest.of(contextKey2, mapState, future2, true, true);
+                ForStDBGetRequest.of(contextKey2, mapState, future2, true, true, null);
         batchGetRequest.add(request2);
 
         TestStateFuture<Boolean> future3 = new TestStateFuture<>();
         ContextKey<Integer> contextKey3 = buildContextKey(1);
         contextKey3.setUserKey("10");
         ForStDBGetRequest<ContextKey<Integer>, String> request3 =
-                ForStDBGetRequest.of(contextKey3, mapState, future3, true, false);
+                ForStDBGetRequest.of(contextKey3, mapState, future3, true, false, null);
         batchGetRequest.add(request3);
 
         TestStateFuture<Boolean> future4 = new TestStateFuture<>();
         ContextKey<Integer> contextKey4 = buildContextKey(1);
         contextKey4.setUserKey("1");
         ForStDBGetRequest<ContextKey<Integer>, String> request4 =
-                ForStDBGetRequest.of(contextKey4, mapState, future4, true, false);
+                ForStDBGetRequest.of(contextKey4, mapState, future4, true, false, null);
         batchGetRequest.add(request4);
 
         ExecutorService executor = Executors.newFixedThreadPool(2);

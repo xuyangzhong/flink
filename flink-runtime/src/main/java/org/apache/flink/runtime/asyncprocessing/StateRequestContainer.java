@@ -33,4 +33,6 @@ public interface StateRequestContainer {
 
     /** Returns whether the container is empty. */
     boolean isEmpty();
+
+    int size();
 }

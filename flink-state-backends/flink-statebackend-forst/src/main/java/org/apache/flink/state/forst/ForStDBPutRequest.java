@@ -45,13 +45,20 @@ public class ForStDBPutRequest<K, V> {
 
     protected final boolean tableIsMap;
 
+    protected Runnable disposer;
+
     protected ForStDBPutRequest(
-            K key, V value, ForStInnerTable<K, V> table, InternalStateFuture<Void> future) {
+            K key,
+            V value,
+            ForStInnerTable<K, V> table,
+            InternalStateFuture<Void> future,
+            Runnable disposer) {
         this.key = key;
         this.value = value;
         this.table = table;
         this.future = future;
         this.tableIsMap = table instanceof ForStMapState;
+        this.disposer = disposer;
     }
 
     public boolean valueIsNull() {
@@ -76,6 +83,9 @@ public class ForStDBPutRequest<K, V> {
     }
 
     public void completeStateFuture() {
+        if (disposer != null) {
+            disposer.run();
+        }
         future.complete(null);
     }
 
@@ -87,7 +97,8 @@ public class ForStDBPutRequest<K, V> {
             K key,
             @Nullable V value,
             ForStInnerTable<K, V> table,
-            InternalStateFuture<Void> future) {
-        return new ForStDBPutRequest<>(key, value, table, future);
+            InternalStateFuture<Void> future,
+            Runnable disposer) {
+        return new ForStDBPutRequest<>(key, value, table, future, disposer);
     }
 }

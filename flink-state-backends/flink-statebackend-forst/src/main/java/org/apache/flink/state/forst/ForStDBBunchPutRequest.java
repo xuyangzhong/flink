@@ -44,8 +44,12 @@ public class ForStDBBunchPutRequest<K> extends ForStDBPutRequest<ContextKey<K>, 
     final ThreadLocal<DataInputDeserializer> valueDeserializerView;
 
     public ForStDBBunchPutRequest(
-            ContextKey<K> key, Map value, ForStMapState table, InternalStateFuture<Void> future) {
-        super(key, value, table, future);
+            ContextKey<K> key,
+            Map value,
+            ForStMapState table,
+            InternalStateFuture<Void> future,
+            Runnable disposer) {
+        super(key, value, table, future, disposer);
         Preconditions.checkArgument(table instanceof ForStMapState);
         this.userValueSerializer = table.userValueSerializer;
         this.valueSerializerView = table.valueSerializerView;

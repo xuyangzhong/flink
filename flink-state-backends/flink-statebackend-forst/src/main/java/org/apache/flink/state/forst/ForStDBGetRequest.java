@@ -41,12 +41,15 @@ public class ForStDBGetRequest<K, V> {
 
     private int keyGroupPrefixBytes = 1;
 
+    private Runnable disposer;
+
     private ForStDBGetRequest(
             K key,
             ForStInnerTable<K, V> table,
             InternalStateFuture future,
             boolean toBoolean,
-            boolean checkMapEmpty) {
+            boolean checkMapEmpty,
+            Runnable disposer) {
         this.key = key;
         this.table = table;
         this.future = future;
@@ -55,6 +58,7 @@ public class ForStDBGetRequest<K, V> {
         if (table instanceof ForStMapState) {
             keyGroupPrefixBytes = ((ForStMapState) table).getKeyGroupPrefixBytes();
         }
+        this.disposer = disposer;
     }
 
     public int getKeyGroupPrefixBytes() {
@@ -75,6 +79,9 @@ public class ForStDBGetRequest<K, V> {
 
     @SuppressWarnings("rawtypes")
     public void completeStateFuture(byte[] bytesValue) throws IOException {
+        if (disposer != null) {
+            disposer.run();
+        }
         if (toBoolean) {
             if (checkMapEmpty) {
                 ((InternalStateFuture<Boolean>) future).complete(bytesValue == null);
@@ -92,8 +99,8 @@ public class ForStDBGetRequest<K, V> {
     }
 
     static <K, V> ForStDBGetRequest<K, V> of(
-            K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future) {
-        return new ForStDBGetRequest<>(key, table, future, false, false);
+            K key, ForStInnerTable<K, V> table, InternalStateFuture<V> future, Runnable disposer) {
+        return new ForStDBGetRequest<>(key, table, future, false, false, disposer);
     }
 
     @SuppressWarnings("rawtypes")
@@ -102,7 +109,8 @@ public class ForStDBGetRequest<K, V> {
             ForStInnerTable<K, V> table,
             InternalStateFuture future,
             boolean toBoolean,
-            boolean checkMapEmpty) {
-        return new ForStDBGetRequest<>(key, table, future, toBoolean, checkMapEmpty);
+            boolean checkMapEmpty,
+            Runnable disposer) {
+        return new ForStDBGetRequest<>(key, table, future, toBoolean, checkMapEmpty, disposer);
     }
 }

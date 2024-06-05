@@ -158,7 +158,8 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
                 this,
                 stateRequest.getFuture(),
                 stateRequest.getRequestType() != StateRequestType.MAP_GET,
-                stateRequest.getRequestType() == StateRequestType.MAP_IS_EMPTY);
+                stateRequest.getRequestType() == StateRequestType.MAP_IS_EMPTY,
+                stateRequestHandler.getDisposer());
     }
 
     @Override
@@ -175,7 +176,11 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
         }
 
         return ForStDBPutRequest.of(
-                contextKey, value, this, (InternalStateFuture<Void>) stateRequest.getFuture());
+                contextKey,
+                value,
+                this,
+                (InternalStateFuture<Void>) stateRequest.getFuture(),
+                stateRequestHandler.getDisposer());
     }
 
     /**
@@ -191,7 +196,12 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
         ContextKey<K> contextKey =
                 new ContextKey<>((RecordContext<K>) stateRequest.getRecordContext(), null);
         Map<UK, UV> value = (Map<UK, UV>) stateRequest.getPayload();
-        return new ForStDBBunchPutRequest(contextKey, value, this, stateRequest.getFuture());
+        return new ForStDBBunchPutRequest(
+                contextKey,
+                value,
+                this,
+                stateRequest.getFuture(),
+                stateRequestHandler.getDisposer());
     }
 
     /**
@@ -239,7 +249,8 @@ public class ForStMapState<K, UK, UV> extends InternalMapState<K, UK, UV>
                 this,
                 stateRequestHandler,
                 stateRequest.getFuture(),
-                seekBytes);
+                seekBytes,
+                stateRequestHandler.getDisposer());
     }
 
     static <UK, UV, K, SV, S extends State> S create(

@@ -36,6 +36,11 @@ public class MockStateRequestContainer implements StateRequestContainer {
         return stateRequestList.isEmpty();
     }
 
+    @Override
+    public int size() {
+        return stateRequestList.size();
+    }
+
     public List<StateRequest<?, ?, ?>> getStateRequestList() {
         return stateRequestList;
     }

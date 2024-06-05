@@ -47,7 +47,8 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
                             buildContextKey(i),
                             String.valueOf(i),
                             ((i % 2 == 0) ? valueState1 : valueState2),
-                            new TestStateFuture<>()));
+                            new TestStateFuture<>(),
+                            null));
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -78,7 +79,8 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
                             contextKey,
                             String.valueOf(i),
                             ((i % 2 == 0) ? mapState1 : mapState1),
-                            new TestStateFuture<>()));
+                            new TestStateFuture<>(),
+                            null));
         }
 
         HashMap<String, String> map = new HashMap<>(100);
@@ -88,7 +90,7 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
         }
         batchPutRequest.add(
                 new ForStDBBunchPutRequest<Integer>(
-                        contextKey, map, mapState1, new TestStateFuture<>()));
+                        contextKey, map, mapState1, new TestStateFuture<>(), null));
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
         ForStWriteBatchOperation writeBatchOperation =
@@ -126,7 +128,8 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
                             buildContextKey(i),
                             String.valueOf(i),
                             valueState,
-                            new TestStateFuture<>()));
+                            new TestStateFuture<>(),
+                            null));
         }
         ExecutorService executor = Executors.newFixedThreadPool(2);
         ForStWriteBatchOperation writeBatchOperation =
@@ -139,14 +142,19 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
             if (i % 8 == 0) {
                 batchPutRequest.add(
                         ForStDBPutRequest.of(
-                                buildContextKey(i), null, valueState, new TestStateFuture<>()));
+                                buildContextKey(i),
+                                null,
+                                valueState,
+                                new TestStateFuture<>(),
+                                null));
             } else {
                 batchPutRequest.add(
                         ForStDBPutRequest.of(
                                 buildContextKey(i),
                                 String.valueOf(i * 2),
                                 valueState,
-                                new TestStateFuture<>()));
+                                new TestStateFuture<>(),
+                                null));
             }
         }
         ForStWriteBatchOperation writeBatchOperation2 =
@@ -176,7 +184,11 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
             contextKey.setUserKey(String.valueOf(i));
             batchPutRequest.add(
                     ForStDBPutRequest.of(
-                            contextKey, String.valueOf(i), mapState, new TestStateFuture<>()));
+                            contextKey,
+                            String.valueOf(i),
+                            mapState,
+                            new TestStateFuture<>(),
+                            null));
         }
 
         ExecutorService executor = Executors.newFixedThreadPool(2);
@@ -195,7 +207,7 @@ class ForStWriteBatchOperationTest extends ForStDBOperationTestBase {
         List<ForStDBPutRequest<?, ?>> batchPutRequest1 = new ArrayList<>();
         batchPutRequest1.add(
                 new ForStDBBunchPutRequest<Integer>(
-                        contextKey, null, mapState, new TestStateFuture<>()));
+                        contextKey, null, mapState, new TestStateFuture<>(), null));
 
         writeBatchOperation =
                 new ForStWriteBatchOperation(db, batchPutRequest1, new WriteOptions(), executor);

@@ -109,7 +109,10 @@ public class ForStValueState<K, V> extends InternalValueState<K, V>
         ContextKey<K> contextKey =
                 new ContextKey<>((RecordContext<K>) stateRequest.getRecordContext());
         return ForStDBGetRequest.of(
-                contextKey, this, (InternalStateFuture<V>) stateRequest.getFuture());
+                contextKey,
+                this,
+                (InternalStateFuture<V>) stateRequest.getFuture(),
+                stateRequestHandler.getDisposer());
     }
 
     @SuppressWarnings("unchecked")
@@ -126,6 +129,10 @@ public class ForStValueState<K, V> extends InternalValueState<K, V>
                         ? null // "Delete(key)" is equivalent to "Put(key, null)"
                         : (V) stateRequest.getPayload();
         return ForStDBPutRequest.of(
-                contextKey, value, this, (InternalStateFuture<Void>) stateRequest.getFuture());
+                contextKey,
+                value,
+                this,
+                (InternalStateFuture<Void>) stateRequest.getFuture(),
+                stateRequestHandler.getDisposer());
     }
 }

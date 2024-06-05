@@ -87,6 +87,11 @@ public class ForStDBOperationTestBase {
                     @Nullable State state, StateRequestType type, @Nullable IN payload) {
                 throw new UnsupportedOperationException();
             }
+
+            @Override
+            public Runnable getDisposer() {
+                return null;
+            }
         };
     }
 

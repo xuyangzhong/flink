@@ -39,4 +39,6 @@ public interface StateRequestHandler {
      */
     <IN, OUT> InternalStateFuture<OUT> handleRequest(
             @Nullable State state, StateRequestType type, @Nullable IN payload);
+
+    Runnable getDisposer();
 }
