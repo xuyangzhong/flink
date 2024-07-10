@@ -21,10 +21,16 @@ package org.apache.flink.streaming.api.functions;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.api.common.functions.OpenContext;
+import org.apache.flink.runtime.asyncprocessing.declare.DeclarationContext;
+import org.apache.flink.runtime.asyncprocessing.declare.DeclarationException;
 import org.apache.flink.streaming.api.TimeDomain;
 import org.apache.flink.streaming.api.TimerService;
+import org.apache.flink.streaming.runtime.operators.asyncprocessing.declare.DeclarativeProcessingInput;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
+import org.apache.flink.util.function.TriConsumerWithException;
+
+import javax.annotation.Nullable;
 
 /**
  * A keyed function that processes elements of a stream.
@@ -53,6 +59,23 @@ import org.apache.flink.util.OutputTag;
 public abstract class KeyedProcessFunction<K, I, O> extends AbstractRichFunction {
 
     private static final long serialVersionUID = 1L;
+
+    /**
+     * Declare process logic with async state if necessary.
+     *
+     * <p>See more at {@link DeclarativeProcessingInput#declareProcess}
+     *
+     * <p>Corresponding to <a
+     * href="https://alidocs.dingtalk.com/i/nodes/XPwkYGxZV347LdvpHYbo0pvBJAgozOKL">Q1</a>
+     *
+     * @param context the context that provides useful methods to define named callbacks.
+     * @return the whole processing logic just like {@code processElement}.
+     */
+    @Nullable
+    protected TriConsumerWithException<I, Context, Collector<O>, Exception> declareProcess(
+            DeclarationContext context) throws DeclarationException {
+        return null;
+    }
 
     /**
      * Process one element from the input stream.
