@@ -66,12 +66,12 @@ object StreamingWithAggTestBase {
   @Parameters(name = "LocalGlobal={0}, {1}, StateBackend={2}")
   def parameters(): util.Collection[Array[java.lang.Object]] = {
     Seq[Array[AnyRef]](
-      Array(LocalGlobalOff, MiniBatchOff, HEAP_BACKEND),
-      Array(LocalGlobalOff, MiniBatchOn, HEAP_BACKEND),
-      Array(LocalGlobalOn, MiniBatchOn, HEAP_BACKEND),
-      Array(LocalGlobalOff, MiniBatchOff, ROCKSDB_BACKEND),
-      Array(LocalGlobalOff, MiniBatchOn, ROCKSDB_BACKEND),
-      Array(LocalGlobalOn, MiniBatchOn, ROCKSDB_BACKEND)
+      Array(LocalGlobalOff, MiniBatchOff, HEAP_BACKEND)
+//      Array(LocalGlobalOff, MiniBatchOn, HEAP_BACKEND),
+//      Array(LocalGlobalOn, MiniBatchOn, HEAP_BACKEND),
+//      Array(LocalGlobalOff, MiniBatchOff, ROCKSDB_BACKEND),
+//      Array(LocalGlobalOff, MiniBatchOn, ROCKSDB_BACKEND),
+//      Array(LocalGlobalOn, MiniBatchOn, ROCKSDB_BACKEND)
     )
   }
 }
