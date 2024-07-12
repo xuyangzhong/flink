@@ -238,6 +238,8 @@ public class FromElementsFunction<T>
                 numElementsEmitted++;
             }
         }
+        // TODO sleep a little time after all records was emitted to make it easy to reproduce the problem
+        Thread.sleep(100);
     }
 
     @Override

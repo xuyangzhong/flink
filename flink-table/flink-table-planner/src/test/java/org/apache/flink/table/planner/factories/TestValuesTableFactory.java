@@ -301,7 +301,7 @@ public final class TestValuesTableFactory
     }
 
     /** Parse the given RowKind short string into instance of RowKind. */
-    private static RowKind parseRowKind(String rowKindShortString) {
+    public static RowKind parseRowKind(String rowKindShortString) {
         switch (rowKindShortString) {
             case "+I":
                 return RowKind.INSERT;
@@ -547,7 +547,7 @@ public final class TestValuesTableFactory
         if (sourceClass.equals("DEFAULT")) {
             if (internalData) {
                 return new TestValuesScanTableSourceWithInternalData(
-                        dataId, isBounded, sleepAfterElements, sleepTimeMillis);
+                        dataId, isBounded, sleepAfterElements, sleepTimeMillis, changelogMode);
             }
 
             Collection<Row> data = registeredData.getOrDefault(dataId, Collections.emptyList());
@@ -1929,18 +1929,24 @@ public final class TestValuesTableFactory
         private final boolean bounded;
         private final int sleepAfterElements;
         private final long sleepTimeMillis;
+        private final ChangelogMode changelogMode;
 
         public TestValuesScanTableSourceWithInternalData(
-                String dataId, boolean bounded, int sleepAfterElements, long sleepTimeMillis) {
+                String dataId,
+                boolean bounded,
+                int sleepAfterElements,
+                long sleepTimeMillis,
+                ChangelogMode changelogMode) {
             this.dataId = dataId;
             this.bounded = bounded;
             this.sleepAfterElements = sleepAfterElements;
             this.sleepTimeMillis = sleepTimeMillis;
+            this.changelogMode = changelogMode;
         }
 
         @Override
         public ChangelogMode getChangelogMode() {
-            return ChangelogMode.insertOnly();
+            return changelogMode;
         }
 
         @Override
@@ -1953,7 +1959,7 @@ public final class TestValuesTableFactory
         @Override
         public DynamicTableSource copy() {
             return new TestValuesScanTableSourceWithInternalData(
-                    dataId, bounded, sleepAfterElements, sleepTimeMillis);
+                    dataId, bounded, sleepAfterElements, sleepTimeMillis, changelogMode);
         }
 
         @Override
