@@ -45,7 +45,7 @@ public class HeartbeatManagerOptions {
     public static final ConfigOption<Duration> HEARTBEAT_TIMEOUT =
             key("heartbeat.timeout")
                     .durationType()
-                    .defaultValue(Duration.ofMillis(50000L))
+                    .defaultValue(Duration.ofMillis(5000000L))
                     .withDescription(
                             "Timeout for requesting and receiving heartbeats for both sender and receiver sides.");
 

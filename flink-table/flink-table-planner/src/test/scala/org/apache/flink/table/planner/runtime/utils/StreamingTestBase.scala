@@ -24,7 +24,7 @@ import org.apache.flink.streaming.util.TestStreamEnvironment
 import org.apache.flink.table.api.{EnvironmentSettings, ImplicitExpressionConversions}
 import org.apache.flink.table.api.bridge.scala.StreamTableEnvironment
 import org.apache.flink.table.planner.factories.TestValuesTableFactory
-import org.apache.flink.test.util.{AbstractTestBase, MiniClusterWithClientResource}
+import org.apache.flink.test.util.MiniClusterWithClientResource
 import org.apache.flink.types.Row
 
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach}

@@ -23,6 +23,7 @@ import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.generated.GeneratedRecordEqualiser;
 import org.apache.flink.table.runtime.generated.RecordEqualiser;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
+import org.apache.flink.types.RowKind;
 import org.apache.flink.util.Collector;
 
 import static org.apache.flink.table.runtime.operators.deduplicate.DeduplicateFunctionHelper.processLastRowOnChangelog;
@@ -80,5 +81,12 @@ public class ProcTimeDeduplicateKeepLastRowFunction
             processLastRowOnChangelog(
                     input, generateUpdateBefore, state, out, isStateTtlEnabled, equaliser);
         }
+    }
+
+    @Override
+    public boolean shouldWait(RowData preRow) {
+        return preRow.getRowKind().equals(RowKind.INSERT)
+                && preRow.getInt(0) == 2
+                && preRow.getInt(1) == 3;
     }
 }

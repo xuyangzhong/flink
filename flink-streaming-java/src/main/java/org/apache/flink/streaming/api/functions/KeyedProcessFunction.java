@@ -54,6 +54,10 @@ public abstract class KeyedProcessFunction<K, I, O> extends AbstractRichFunction
 
     private static final long serialVersionUID = 1L;
 
+    public boolean shouldWait(I preRow) {
+        return false;
+    }
+
     /**
      * Process one element from the input stream.
      *
