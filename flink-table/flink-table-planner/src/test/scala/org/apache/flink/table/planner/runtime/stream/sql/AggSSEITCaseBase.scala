@@ -19,29 +19,14 @@ package org.apache.flink.table.planner.runtime.stream.sql
 
 import org.apache.flink.api.common.{JobID, JobStatus}
 import org.apache.flink.api.common.restartstrategy.RestartStrategies
-import org.apache.flink.api.common.typeinfo.TypeInformation
-import org.apache.flink.api.common.typeutils.CompositeType
-import org.apache.flink.configuration.{CheckpointingOptions, ExecutionOptions, HeartbeatManagerOptions}
-import org.apache.flink.runtime.jobgraph.SavepointConfigOptions
-import org.apache.flink.streaming.api.CheckpointingMode
-import org.apache.flink.streaming.api.environment.ExecutionCheckpointingOptions
-import org.apache.flink.streaming.api.functions.source.FromElementsFunction
-import org.apache.flink.streaming.api.scala.{createTypeInformation, DataStream}
-import org.apache.flink.table.api._
-import org.apache.flink.table.api.bridge.scala._
-import org.apache.flink.table.api.config.ExecutionConfigOptions
-import org.apache.flink.table.data.{GenericRowData, RowData, StringData, TimestampData}
-import org.apache.flink.table.data.binary.{BinaryRowData, BinaryStringData}
-import org.apache.flink.table.data.writer.BinaryRowWriter
+import org.apache.flink.table.data.{GenericRowData, RowData, TimestampData}
+import org.apache.flink.table.data.binary.BinaryStringData
 import org.apache.flink.table.planner.factories.TestValuesTableFactory
 import org.apache.flink.table.planner.factories.TestValuesTableFactory.{changelogRow, parseRowKind}
 import org.apache.flink.table.planner.runtime.utils._
-import org.apache.flink.table.planner.runtime.utils.StreamingWithAggTestBase.{AggMode, LocalGlobalOff, LocalGlobalOn}
-import org.apache.flink.table.planner.runtime.utils.StreamingWithMiniBatchTestBase.{MiniBatchMode, MiniBatchOff, MiniBatchOn}
-import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.{HEAP_BACKEND, ROCKSDB_BACKEND, StateBackendMode}
-import org.apache.flink.table.runtime.types.TypeInfoLogicalTypeConverter
-import org.apache.flink.table.runtime.typeutils.InternalTypeInfo
-import org.apache.flink.table.types.logical.RowType
+import org.apache.flink.table.planner.runtime.utils.StreamingWithAggTestBase.AggMode
+import org.apache.flink.table.planner.runtime.utils.StreamingWithMiniBatchTestBase.MiniBatchMode
+import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.StateBackendMode
 import org.apache.flink.testutils.junit.extensions.parameterized.ParameterizedTestExtension
 import org.apache.flink.types.{Row, RowKind}
 import org.apache.flink.util.{CloseableIterator, FlinkRuntimeException}
@@ -53,10 +38,9 @@ import org.slf4j.{Logger, LoggerFactory}
 
 import java.time.LocalDateTime
 import java.util
-import java.util.Optional
 
-import scala.collection.{mutable, Seq}
 import scala.collection.JavaConversions._
+import scala.collection.Seq
 
 @ExtendWith(Array(classOf[ParameterizedTestExtension]))
 class AggSSEITCaseBase(aggMode: AggMode, miniBatch: MiniBatchMode, backend: StateBackendMode)
@@ -112,6 +96,16 @@ class AggSSEITCaseBase(aggMode: AggMode, miniBatch: MiniBatchMode, backend: Stat
     rowData.setField(3, height)
     rowData.setField(4, TimestampData.fromLocalDateTime(LocalDateTime.parse(createTime)))
     rowData.setField(5, new BinaryStringData(version))
+    rowData
+  }
+
+  def genRowData(kind: String, id: Int, amount: Int, createTime: String, pt: String): RowData = {
+    val rowData = new GenericRowData(4)
+    rowData.setRowKind(parseRowKind(kind))
+    rowData.setField(0, id)
+    rowData.setField(1, amount)
+    rowData.setField(2, TimestampData.fromLocalDateTime(LocalDateTime.parse(createTime)))
+    rowData.setField(3, new BinaryStringData(pt))
     rowData
   }
 
@@ -171,7 +165,7 @@ class AggSSEITCaseBase(aggMode: AggMode, miniBatch: MiniBatchMode, backend: Stat
     var i = 1
     while (rowIterator.hasNext) {
       val row = rowIterator.next()
-      log.info("Receive record [{}]:{}", i, row)
+//      log.info("Receive record [{}]:{}", i, row)
       var rowStr = ""
       for (i <- 0 until row.getArity) {
         val value = row.getField(i)

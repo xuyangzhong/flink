@@ -25,7 +25,7 @@ import org.apache.flink.table.planner.runtime.utils.StreamingWithStateTestBase.S
 import org.apache.flink.testutils.junit.extensions.parameterized.ParameterizedTestExtension
 import org.apache.flink.types.Row
 
-import org.junit.jupiter.api.{BeforeEach, Test, TestTemplate}
+import org.junit.jupiter.api.{BeforeEach, TestTemplate}
 import org.junit.jupiter.api.extension.ExtendWith
 
 @ExtendWith(Array(classOf[ParameterizedTestExtension]))
@@ -68,6 +68,12 @@ class AggSSEWindowITCase(aggMode: AggMode, miniBatch: MiniBatchMode, backend: St
     genRowData("+I", 6, "W", 16, 160, "2024-03-13T10:16:19", "1"),
     genRowData("+I", 7, "W", 12, 140, "2024-03-13T10:17:21", "0"),
     genRowData("+I", 8, "M", 18, 140, "2024-03-13T10:18:46", "0")
+  )
+
+  val data3: Seq[RowData] = Seq(
+    genRowData("+I", 1, 1, "2024-03-13T10:12", "1"),
+    genRowData("+I", 2, 3, "2024-03-13T10:16", "1"),
+    genRowData("+I", 3, 2, "2024-03-13T10:13", "1")
   )
 
   @BeforeEach
@@ -123,6 +129,28 @@ class AggSSEWindowITCase(aggMode: AggMode, miniBatch: MiniBatchMode, backend: St
                        | 'bounded' = 'true'
                        |)
                        |""".stripMargin)
+
+    val data3Id = TestValuesTableFactory.registerRowData(data3)
+    tEnv.executeSql(s"""
+                       |CREATE TABLE MyTable3 (
+                       |  id int,
+                       |  amount int,
+                       |  create_time timestamp(3),
+                       |  pt string,
+                       |  proc_time AS PROCTIME(),
+                       |  WATERMARK FOR `create_time` AS `create_time` - INTERVAL '0' MINUTES,
+                       |  PRIMARY KEY (id) NOT ENFORCED
+                       |) WITH (
+                       | 'connector' = 'values',
+                       | 'data-id' = '$data3Id',
+                       | 'changelog-mode' = 'I,UA,D',
+                       | 'disable-lookup' = 'true',
+                       | 'source.sleep-after-elements' = '16',
+                       | 'source.sleep-time' = '100ms',
+                       | 'register-internal-data' = 'true',
+                       | 'bounded' = 'true'
+                       |)
+                       |""".stripMargin)
   }
 
   @TestTemplate
@@ -153,18 +181,39 @@ class AggSSEWindowITCase(aggMode: AggMode, miniBatch: MiniBatchMode, backend: St
     val sqlQuery =
       "select version, " +
         "HOP_START(create_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES) AS w_start, " +
+        "HOP_END(create_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES) AS w_end, " +
         "max(height) as max_height, " +
         "count(age) as count_age, " +
         "sum(height) as sum_height " +
         "from MyTable2 " +
         "group by HOP(create_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES), version"
     val expected = List(
-      "0,2024-03-13T10:05,120,1,120",
-      "0,2024-03-13T10:10,140,5,620",
-      "0,2024-03-13T10:15,140,3,400",
-      "1,2024-03-13T10:05,180,3,420",
-      "1,2024-03-13T10:10,180,3,480",
-      "1,2024-03-13T10:15,160,1,160"
+      "0,2024-03-13T10:05,2024-03-13T10:15,120,1,120",
+      "0,2024-03-13T10:10,2024-03-13T10:20,140,5,620",
+      "0,2024-03-13T10:15,2024-03-13T10:25,140,3,400",
+      "1,2024-03-13T10:05,2024-03-13T10:15,180,3,420",
+      "1,2024-03-13T10:10,2024-03-13T10:20,180,3,480",
+      "1,2024-03-13T10:15,2024-03-13T10:25,160,1,160"
+    )
+    executeSql(sqlQuery, expected, List(0, 1))
+  }
+
+  @TestTemplate
+  def test(): Unit = {
+    // use TestValuesScanTableSourceWithInternalData to reproduce the problem
+    val sqlQuery =
+      "select pt, " +
+        "HOP_START(create_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES) AS w_start, " +
+        "HOP_END(create_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES) AS w_end, " +
+        "sum(amount) as count_age " +
+        "from MyTable3 " +
+        "group by HOP(create_time, INTERVAL '5' MINUTES, INTERVAL '10' MINUTES), pt"
+
+    // If uncomment 'Thread.sleep' in `KeyedProcessOperator#processWatermark`, the result is wrong
+    val expected = List(
+      "1,2024-03-13T10:05,2024-03-13T10:15,1",
+      "1,2024-03-13T10:10,2024-03-13T10:20,6",
+      "1,2024-03-13T10:15,2024-03-13T10:25,3"
     )
     executeSql(sqlQuery, expected, List(0, 1))
   }

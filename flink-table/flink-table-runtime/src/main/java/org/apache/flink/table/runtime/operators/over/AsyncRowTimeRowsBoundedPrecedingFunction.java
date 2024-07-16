@@ -31,6 +31,7 @@ import org.apache.flink.metrics.Counter;
 import org.apache.flink.runtime.asyncprocessing.declare.DeclarationContext;
 import org.apache.flink.runtime.asyncprocessing.declare.DeclarationException;
 import org.apache.flink.runtime.asyncprocessing.declare.DeclaredVariable;
+import org.apache.flink.runtime.asyncprocessing.declare.NamedBiFunction;
 import org.apache.flink.runtime.asyncprocessing.declare.NamedFunction;
 import org.apache.flink.runtime.state.v2.MapStateDescriptor;
 import org.apache.flink.runtime.state.v2.ValueStateDescriptor;
@@ -47,6 +48,7 @@ import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
 import org.apache.flink.table.types.logical.LogicalType;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.Preconditions;
+import org.apache.flink.util.function.ThrowingConsumer;
 import org.apache.flink.util.function.TriConsumerWithException;
 
 import org.slf4j.Logger;
@@ -58,6 +60,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -175,12 +178,127 @@ public class AsyncRowTimeRowsBoundedPrecedingFunction<K>
     }
 
     @Override
+    protected ThrowingConsumer<
+                    Tuple3<
+                            RowData,
+                            KeyedProcessFunction<K, RowData, RowData>.Context,
+                            Collector<RowData>>,
+                    Exception>
+            declareProcess(DeclarationContext context) throws DeclarationException {
+
+        // ------------------------------------------------------------------------
+        // variables for async state
+        // ------------------------------------------------------------------------
+        DeclaredVariable<RowData> inputVar =
+                context.declareVariable(
+                        InternalTypeInfo.ofFields(inputFieldTypes), "input", () -> null);
+
+        /**
+         * Corresponding to <a
+         * href="https://alidocs.dingtalk.com/i/nodes/XPwkYGxZV347LdvpHYbo0pvBJAgozOKL">Q4</a>
+         */
+        // Context的TypeInformation和序列化器不太好写
+        // DeclaredVariable<KeyedProcessFunction<K, RowData, RowData>.Context> ctx =
+        //         context.declareVariable(
+        //                 InternalTypeInfo.of(RowType.of(true, inputFieldTypes)),
+        //                 "context",
+        //                 () -> null);
+        AtomicReference<KeyedProcessFunction<K, RowData, RowData>.Context> ctx =
+                new AtomicReference<>();
+
+        DeclaredVariable<Long> minRetentionTimeVar =
+                context.declareVariable(
+                        Types.LONG, "minRetentionTime", () -> this.minRetentionTime);
+
+        DeclaredVariable<Long> maxRetentionTimeVar =
+                context.declareVariable(
+                        Types.LONG, "maxRetentionTime", () -> this.maxRetentionTime);
+
+        DeclaredVariable<Long> triggeringTsVar =
+                context.declareVariable(Types.LONG, "triggeringTs", () -> 0L);
+
+        return context.<Tuple3<
+                                RowData,
+                                KeyedProcessFunction<K, RowData, RowData>.Context,
+                                Collector<RowData>>,
+                        Void>
+                        declareChain(
+                                e -> {
+                                    inputVar.set(e.f0);
+                                    ctx.set(e.f1);
+                                    triggeringTsVar.set(e.f0.getLong(rowTimeIdx));
+                                    return StateFutureUtils.completedVoidFuture();
+                                })
+                .thenCompose(empty -> cleanupTimeState.asyncValue())
+                .thenCompose(
+                        curCleanupTime -> {
+                            if (!stateCleaningEnabled) {
+                                return StateFutureUtils.completedVoidFuture();
+                            }
+
+                            long currentTime = ctx.get().timerService().currentProcessingTime();
+                            return registerProcessingCleanupTimer(
+                                    curCleanupTime,
+                                    currentTime,
+                                    minRetentionTimeVar.get(),
+                                    maxRetentionTimeVar.get(),
+                                    ctx.get().timerService());
+                        })
+                .thenCompose(empty -> lastTriggeringTsState.asyncValue())
+                .thenApply(
+                        lastTriggeringTs -> {
+                            if (lastTriggeringTs == null) {
+                                return 0L;
+                            } else {
+                                return lastTriggeringTs;
+                            }
+                        })
+                .thenConditionallyAccept(
+                        lastTriggeringTs -> triggeringTsVar.get() > lastTriggeringTs,
+                        lastTriggeringTs ->
+                                context.<Tuple3<
+                                                        RowData,
+                                                        KeyedProcessFunction<K, RowData, RowData>
+                                                                .Context,
+                                                        Collector<RowData>>,
+                                                List<RowData>>
+                                                declareChain(
+                                                        e ->
+                                                                inputState.asyncGet(
+                                                                        triggeringTsVar.get()))
+                                        .thenConditionallyCompose(
+                                                Objects::nonNull,
+                                                data -> {
+                                                    data.add(inputVar.get());
+                                                    return inputState.asyncPut(
+                                                            triggeringTsVar.get(), data);
+                                                },
+                                                data -> {
+                                                    data = new ArrayList<>();
+                                                    data.add(inputVar.get());
+                                                    return inputState.asyncPut(
+                                                            triggeringTsVar.get(), data);
+                                                })
+                                        .thenAccept(
+                                                tuple2 -> {
+                                                    if (tuple2.f0) {
+                                                        ctx.get()
+                                                                .timerService()
+                                                                .registerEventTimeTimer(
+                                                                        triggeringTsVar.get());
+                                                    }
+                                                }),
+                        lastTriggeringTs -> numLateRecordsDropped.inc())
+                .finish();
+    }
+
+    //    @Override
     protected TriConsumerWithException<
                     RowData,
                     KeyedProcessFunction<K, RowData, RowData>.Context,
                     Collector<RowData>,
                     Exception>
-            declareProcess(DeclarationContext context) throws DeclarationException {
+            declareProcess2(DeclarationContext context) throws DeclarationException {
         // ------------------------------------------------------------------------
         // variables for async state
         // ------------------------------------------------------------------------
@@ -211,9 +329,27 @@ public class AsyncRowTimeRowsBoundedPrecedingFunction<K>
                 context.declareVariable(
                         Types.LONG, "maxRetentionTime", () -> this.maxRetentionTime);
 
+        DeclaredVariable<Long> lastTriggeringTsVar =
+                context.declareVariable(Types.LONG, "lastTriggeringTs", () -> 0L);
+
         // ------------------------------------------------------------------------
         // callbacks for async state
         // ------------------------------------------------------------------------
+
+        NamedFunction<RowData, StateFuture<Void>> prepareVarsCallBack =
+                context.declare(
+                        "prepareVars",
+                        in -> {
+                            inputVar.set(in);
+                            return StateFutureUtils.completedVoidFuture();
+                        });
+
+        NamedFunction<Void, StateFuture<Long>> getCleanupTimeCallBack =
+                context.declare(
+                        "getCleanupTime",
+                        empty -> {
+                            return cleanupTimeState.asyncValue();
+                        });
 
         /**
          * Corresponding to <a
@@ -228,7 +364,7 @@ public class AsyncRowTimeRowsBoundedPrecedingFunction<K>
                                 "registerProcessingCleanupTime",
                                 (tuple) -> {
                                     if (!stateCleaningEnabledVar.get()) {
-                                        return null;
+                                        return StateFutureUtils.completedVoidFuture();
                                     }
                                     Long curCleanupTime = tuple.f0;
                                     Long currentTime = tuple.f1;
@@ -243,75 +379,114 @@ public class AsyncRowTimeRowsBoundedPrecedingFunction<K>
                                             ctx.timerService());
                                 });
 
-        // input, lastTriggeringTs, context
-        NamedFunction<
-                        Tuple3<RowData, Long, KeyedProcessFunction<K, RowData, RowData>.Context>,
+        NamedFunction<Void, StateFuture<Void>> getLastTriggeringTsCallBack =
+                context.declare(
+                        "getLastTriggeringTs",
+                        empty -> {
+                            return lastTriggeringTsState
+                                    .asyncValue()
+                                    .thenAccept(
+                                            lastTriggeringTs -> {
+                                                if (lastTriggeringTs == null) {
+                                                    lastTriggeringTsVar.set(0L);
+                                                } else {
+                                                    lastTriggeringTsVar.set(lastTriggeringTs);
+                                                }
+                                            });
+                        });
+
+        NamedFunction<Void, Boolean> checkDataExpiredCallBack =
+                context.declare(
+                        "checkDataExpired",
+                        empty -> inputVar.get().getLong(rowTimeIdx) > lastTriggeringTsVar.get());
+
+        NamedFunction<Void, StateFuture<List<RowData>>> getOldDataCallBack =
+                context.declare(
+                        "getOldData",
+                        empty -> {
+                            long triggeringTs = inputVar.get().getLong(rowTimeIdx);
+                            return inputState.asyncGet(triggeringTs);
+                        });
+
+        NamedBiFunction<
+                        List<RowData>,
+                        KeyedProcessFunction<K, RowData, RowData>.Context,
                         StateFuture<Void>>
+                saveDataCallBackWithOriginalDataExists =
+                        context.declare(
+                                "saveDataWithOriginalDataExists",
+                                (dataInState, ctx) -> {
+                                    long triggeringTs = inputVar.get().getLong(rowTimeIdx);
+                                    if (dataInState == null) {
+                                        dataInState = new ArrayList<>();
+                                    }
+                                    dataInState.add(inputVar.get());
+
+                                    return inputState
+                                            .asyncPut(triggeringTs, dataInState)
+                                            .thenAccept(
+                                                    empty -> {
+                                                        ctx.timerService()
+                                                                .registerEventTimeTimer(
+                                                                        triggeringTs);
+                                                    });
+                                });
+
+        // input, lastTriggeringTs, context
+        NamedFunction<KeyedProcessFunction<K, RowData, RowData>.Context, StateFuture<Void>>
                 saveDataCallBack =
                         context.declare(
                                 "saveData",
-                                tuple3 -> {
-                                    RowData input = tuple3.f0;
-                                    Long lastTriggeringTs = tuple3.f1;
-                                    KeyedProcessFunction<K, RowData, RowData>.Context ctx =
-                                            tuple3.f2;
-                                    if (lastTriggeringTs == null) {
-                                        lastTriggeringTs = 0L;
-                                    }
-
+                                ctx -> {
+                                    RowData input = inputVar.get();
                                     // triggering timestamp for trigger calculation
                                     long triggeringTs = input.getLong(rowTimeIdx);
-                                    if (triggeringTs > lastTriggeringTs) {
-                                        /**
-                                         * Corresponding to <a
-                                         * href="https://alidocs.dingtalk.com/i/nodes/XPwkYGxZV347LdvpHYbo0pvBJAgozOKL">Q9</a>
-                                         */
-                                        return inputState
-                                                .asyncGet(triggeringTs)
-                                                .thenAccept(
-                                                        data -> {
-                                                            if (null != data) {
-                                                                data.add(input);
-                                                                inputState.asyncPut(
-                                                                        triggeringTs, data);
-                                                            } else {
-                                                                data = new ArrayList<>();
-                                                                data.add(input);
-                                                                inputState
-                                                                        .asyncPut(
-                                                                                triggeringTs, data)
-                                                                        .thenAccept(
-                                                                                empty ->
-                                                                                        ctx.timerService()
-                                                                                                .registerEventTimeTimer(
-                                                                                                        triggeringTs));
-                                                            }
-                                                        });
-                                    } else {
-                                        numLateRecordsDropped.inc();
-                                        return StateFutureUtils.completedVoidFuture();
-                                    }
+                                    return inputState
+                                            .asyncGet(triggeringTs)
+                                            .thenCompose(
+                                                    data -> {
+                                                        if (data != null) {
+                                                            data.add(inputVar.get());
+                                                            return inputState.asyncPut(
+                                                                    triggeringTs, data);
+                                                        } else {
+                                                            data = new ArrayList<>();
+                                                            data.add(input);
+                                                            return inputState
+                                                                    .asyncPut(triggeringTs, data)
+                                                                    .thenAccept(
+                                                                            empty ->
+                                                                                    ctx.timerService()
+                                                                                            .registerEventTimeTimer(
+                                                                                                    triggeringTs));
+                                                        }
+                                                    });
                                 });
 
-        return (in, ctx, collector) -> {
-            cleanupTimeState
-                    .asyncValue()
-                    .thenCompose(
-                            curCleanupTime ->
-                                    /**
-                                     * Corresponding to <a
-                                     * href="https://alidocs.dingtalk.com/i/nodes/XPwkYGxZV347LdvpHYbo0pvBJAgozOKL">Q3</a>
-                                     */
-                                    registerProcessingCleanupTimerCallBack.apply(
-                                            Tuple3.of(
-                                                    curCleanupTime,
-                                                    ctx.timerService().currentProcessingTime(),
-                                                    ctx)))
-                    .thenCompose(empty -> lastTriggeringTsState.asyncValue())
-                    .thenAccept(
-                            lastTriggeringTs ->
-                                    saveDataCallBack.apply(Tuple3.of(in, lastTriggeringTs, ctx)));
-        };
+        NamedFunction<Void, Void> numLateRecordsDroppedCallBack =
+                context.declare(
+                        "numLateRecordsDropped",
+                        empty -> {
+                            numLateRecordsDropped.inc();
+                            return null;
+                        });
+
+        return (in, ctx, collector) ->
+                prepareVarsCallBack
+                        .apply(in)
+                        .thenCompose(getCleanupTimeCallBack)
+                        .thenCompose(
+                                curCleanupTime ->
+                                        registerProcessingCleanupTimerCallBack.apply(
+                                                Tuple3.of(
+                                                        curCleanupTime,
+                                                        ctx.timerService().currentProcessingTime(),
+                                                        ctx)))
+                        .thenCompose(getLastTriggeringTsCallBack)
+                        .thenConditionallyApply(
+                                checkDataExpiredCallBack,
+                                empty -> saveDataCallBack.apply(ctx),
+                                numLateRecordsDroppedCallBack);
     }
 
     /**

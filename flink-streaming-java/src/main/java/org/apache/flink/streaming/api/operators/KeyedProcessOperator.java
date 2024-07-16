@@ -24,6 +24,7 @@ import org.apache.flink.streaming.api.SimpleTimerService;
 import org.apache.flink.streaming.api.TimeDomain;
 import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.api.functions.KeyedProcessFunction;
+import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.runtime.streamrecord.StreamRecord;
 import org.apache.flink.util.OutputTag;
 
@@ -43,6 +44,8 @@ public class KeyedProcessOperator<K, IN, OUT>
     private transient ContextImpl context;
 
     private transient OnTimerContextImpl onTimerContext;
+
+    private IN preRow;
 
     public KeyedProcessOperator(KeyedProcessFunction<K, IN, OUT> function) {
         super(function);
@@ -65,6 +68,16 @@ public class KeyedProcessOperator<K, IN, OUT>
     }
 
     @Override
+    public void processWatermark(Watermark mark) throws Exception {
+        if (preRow != null && userFunction.shouldWait(preRow)) {
+            LOG.info("Wait a little time");
+            Thread.sleep(500);
+        }
+        LOG.info("output watermark: " + mark.getTimestamp());
+        super.processWatermark(mark);
+    }
+
+    @Override
     public void onEventTime(InternalTimer<K, VoidNamespace> timer) throws Exception {
         collector.setAbsoluteTimestamp(timer.getTimestamp());
         invokeUserFunction(TimeDomain.EVENT_TIME, timer);
@@ -78,6 +91,7 @@ public class KeyedProcessOperator<K, IN, OUT>
 
     @Override
     public void processElement(StreamRecord<IN> element) throws Exception {
+        preRow = element.getValue();
         collector.setTimestamp(element);
         context.element = element;
         userFunction.processElement(element.getValue(), context, collector);

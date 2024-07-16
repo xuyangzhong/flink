@@ -162,6 +162,9 @@ public class AggregateWindowOperator<K, W extends Window> extends WindowOperator
     protected void emitWindowResult(W window) throws Exception {
         windowFunction.prepareAggregateAccumulatorForEmit(window);
         RowData acc = aggWindowAggregator.getAccumulators();
+        LOG.info(
+                "Current count: "
+                        + (acc == null ? "null" : String.valueOf(acc.getLong(inputCountIndex))));
         RowData aggResult = aggWindowAggregator.getValue(window);
         if (produceUpdates) {
             previousState.setCurrentNamespace(window);

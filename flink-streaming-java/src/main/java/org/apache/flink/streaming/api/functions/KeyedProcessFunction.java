@@ -21,6 +21,7 @@ package org.apache.flink.streaming.api.functions;
 import org.apache.flink.annotation.PublicEvolving;
 import org.apache.flink.api.common.functions.AbstractRichFunction;
 import org.apache.flink.api.common.functions.OpenContext;
+import org.apache.flink.api.java.tuple.Tuple3;
 import org.apache.flink.runtime.asyncprocessing.declare.DeclarationContext;
 import org.apache.flink.runtime.asyncprocessing.declare.DeclarationException;
 import org.apache.flink.streaming.api.TimeDomain;
@@ -28,7 +29,7 @@ import org.apache.flink.streaming.api.TimerService;
 import org.apache.flink.streaming.runtime.operators.asyncprocessing.declare.DeclarativeProcessingInput;
 import org.apache.flink.util.Collector;
 import org.apache.flink.util.OutputTag;
-import org.apache.flink.util.function.TriConsumerWithException;
+import org.apache.flink.util.function.ThrowingConsumer;
 
 import javax.annotation.Nullable;
 
@@ -72,9 +73,13 @@ public abstract class KeyedProcessFunction<K, I, O> extends AbstractRichFunction
      * @return the whole processing logic just like {@code processElement}.
      */
     @Nullable
-    protected TriConsumerWithException<I, Context, Collector<O>, Exception> declareProcess(
+    protected ThrowingConsumer<Tuple3<I, Context, Collector<O>>, Exception> declareProcess(
             DeclarationContext context) throws DeclarationException {
         return null;
+    }
+
+    public boolean shouldWait(I preRow) {
+        return false;
     }
 
     /**

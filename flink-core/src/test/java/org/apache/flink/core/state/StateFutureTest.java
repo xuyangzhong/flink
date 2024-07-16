@@ -216,7 +216,7 @@ public class StateFutureTest {
     }
 
     @Test
-    void testConditionally() {
+    public void testConditionally() {
         StateFutureImpl.CallbackRunner runner = new TestCallbackRunner(null);
         final AtomicInteger counter = new AtomicInteger(0);
 

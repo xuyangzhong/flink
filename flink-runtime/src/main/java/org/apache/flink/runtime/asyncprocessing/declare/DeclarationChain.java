@@ -133,9 +133,9 @@ public class DeclarationChain<IN> {
         }
 
         public <U, V> DeclarationStage<Tuple2<Boolean, Object>> thenConditionallyApply(
-                FunctionWithException<T, Boolean, Exception> condition,
-                FunctionWithException<T, U, Exception> actionIfTrue,
-                FunctionWithException<T, V, Exception> actionIfFalse)
+                FunctionWithException<T, Boolean, ? extends Exception> condition,
+                FunctionWithException<T, U, ? extends Exception> actionIfTrue,
+                FunctionWithException<T, V, ? extends Exception> actionIfFalse)
                 throws DeclarationException {
             preCheck();
             DeclarationStage<Tuple2<Boolean, Object>> next = new DeclarationStage<>();

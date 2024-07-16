@@ -176,6 +176,8 @@ public abstract class WindowOperator<K, W extends Window> extends AbstractStream
     private transient Meter lateRecordsDroppedRate;
     private transient Gauge<Long> watermarkLatency;
 
+    protected int inputCountIndex;
+
     WindowOperator(
             NamespaceAggsHandleFunctionBase<W> windowAggregator,
             GroupWindowAssigner<W> windowAssigner,
@@ -207,6 +209,7 @@ public abstract class WindowOperator<K, W extends Window> extends AbstractStream
         this.rowtimeIndex = rowtimeIndex;
         this.shiftTimeZone = shiftTimeZone;
         this.recordCounter = RecordCounter.of(inputCountIndex);
+        this.inputCountIndex = inputCountIndex;
 
         setChainingStrategy(ChainingStrategy.ALWAYS);
     }
@@ -240,6 +243,7 @@ public abstract class WindowOperator<K, W extends Window> extends AbstractStream
         this.rowtimeIndex = rowtimeIndex;
         this.shiftTimeZone = shiftTimeZone;
         this.recordCounter = RecordCounter.of(inputCountIndex);
+        this.inputCountIndex = inputCountIndex;
 
         setChainingStrategy(ChainingStrategy.ALWAYS);
     }
@@ -373,6 +377,7 @@ public abstract class WindowOperator<K, W extends Window> extends AbstractStream
             triggerContext.window = window;
             boolean triggerResult = triggerContext.onElement(inputRow, timestamp);
             if (triggerResult) {
+                LOG.info("Triggered here: element");
                 emitWindowResult(window);
             }
             // register a clean up timer for the window
@@ -392,6 +397,7 @@ public abstract class WindowOperator<K, W extends Window> extends AbstractStream
         triggerContext.window = timer.getNamespace();
         if (triggerContext.onEventTime(timer.getTimestamp())) {
             // fire
+            LOG.info("Triggered here: event time: " + timer.getTimestamp());
             emitWindowResult(triggerContext.window);
         }
 
@@ -407,6 +413,7 @@ public abstract class WindowOperator<K, W extends Window> extends AbstractStream
         triggerContext.window = timer.getNamespace();
         if (triggerContext.onProcessingTime(timer.getTimestamp())) {
             // fire
+            LOG.info("Triggered here: proc time");
             emitWindowResult(triggerContext.window);
         }
 
