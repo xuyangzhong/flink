@@ -47,6 +47,8 @@ public class ForStOptions {
 
     /** The remote directory where ForSt puts its SST files. */
     public static final ConfigOption<String> REMOTE_DIRECTORY =
+            // 内存用本地目录
+            // 远程用oss
             ConfigOptions.key("state.backend.forst.remote-dir")
                     .stringType()
                     .noDefaultValue()

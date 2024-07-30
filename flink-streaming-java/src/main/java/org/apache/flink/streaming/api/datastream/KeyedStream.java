@@ -46,6 +46,7 @@ import org.apache.flink.streaming.api.functions.query.QueryableAppendingStateOpe
 import org.apache.flink.streaming.api.functions.query.QueryableValueStateOperator;
 import org.apache.flink.streaming.api.functions.sink.SinkFunction;
 import org.apache.flink.streaming.api.graph.StreamGraphGenerator;
+import org.apache.flink.streaming.api.operators.AsyncKeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.LegacyKeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.StreamOperatorFactory;
@@ -400,6 +401,24 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
         return process(keyedProcessFunction, outType);
     }
 
+    @PublicEvolving
+    public <R> SingleOutputStreamOperator<R> asyncProcess(
+            KeyedProcessFunction<KEY, T, R> keyedProcessFunction) {
+
+        TypeInformation<R> outType =
+                TypeExtractor.getUnaryOperatorReturnType(
+                        keyedProcessFunction,
+                        KeyedProcessFunction.class,
+                        1,
+                        2,
+                        TypeExtractor.NO_INDEX,
+                        getType(),
+                        Utils.getCallLocationName(),
+                        true);
+
+        return asyncProcess(keyedProcessFunction, outType);
+    }
+
     /**
      * Applies the given {@link KeyedProcessFunction} on the input stream, thereby creating a
      * transformed output stream.
@@ -422,6 +441,15 @@ public class KeyedStream<T, KEY> extends DataStream<T> {
         KeyedProcessOperator<KEY, T, R> operator =
                 new KeyedProcessOperator<>(clean(keyedProcessFunction));
         return transform("KeyedProcess", outputType, operator);
+    }
+
+    @Internal
+    public <R> SingleOutputStreamOperator<R> asyncProcess(
+            KeyedProcessFunction<KEY, T, R> keyedProcessFunction, TypeInformation<R> outputType) {
+
+        AsyncKeyedProcessOperator<KEY, T, R> operator =
+                new AsyncKeyedProcessOperator<>(clean(keyedProcessFunction));
+        return transform("AsyncKeyedProcess", outputType, operator);
     }
 
     // ------------------------------------------------------------------------

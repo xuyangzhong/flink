@@ -225,7 +225,9 @@ public abstract class AbstractAsyncStateStreamOperator<OUT> extends AbstractStre
     public <K, N> InternalTimerService<N> getInternalTimerService(
             String name, TypeSerializer<N> namespaceSerializer, Triggerable<K, N> triggerable) {
         if (timeServiceManager == null) {
-            throw new RuntimeException("The timer service has not been initialized.");
+            // ignore timer
+            return null;
+            //            throw new RuntimeException("The timer service has not been initialized.");
         }
 
         if (!isAsyncStateProcessingEnabled()) {
