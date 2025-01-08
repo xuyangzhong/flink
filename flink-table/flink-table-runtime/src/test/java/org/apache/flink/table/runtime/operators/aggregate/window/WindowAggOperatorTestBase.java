@@ -153,7 +153,8 @@ abstract class WindowAggOperatorTestBase {
         if (countStarIndex != null) {
             builder.countStarIndex(countStarIndex);
         }
-        if (enableAsyncState) {
+        // unslice assigner does not support async state yet
+        if (enableAsyncState && assigner instanceof SliceAssigner) {
             builder.generatedKeyEqualiser(GEN_KEY_EQUALISER);
             builder.enableAsyncState();
         }
@@ -163,7 +164,6 @@ abstract class WindowAggOperatorTestBase {
         if (assigner instanceof SliceAssigner) {
             assertThat(isAsyncStateOperator(operator)).isEqualTo(enableAsyncState);
         } else {
-            // unslice assigner does not support async state yet
             assertThat(isAsyncStateOperator(operator)).isFalse();
         }
 
