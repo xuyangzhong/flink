@@ -18,10 +18,10 @@
 
 package org.apache.flink.table.runtime.operators.deduplicate;
 
+import org.apache.flink.runtime.asyncprocessing.operators.AsyncKeyedProcessOperator;
 import org.apache.flink.runtime.checkpoint.OperatorSubtaskState;
 import org.apache.flink.streaming.api.operators.KeyedProcessOperator;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
-import org.apache.flink.streaming.api.operators.asyncprocessing.AsyncStateKeyedProcessOperator;
 import org.apache.flink.streaming.api.watermark.Watermark;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.RowData;
@@ -211,7 +211,7 @@ class RowTimeDeduplicateFunctionTest extends RowTimeDeduplicateFunctionTestBase 
                                 generateUpdateBefore,
                                 generateInsert,
                                 keepLastRow);
-                keyedProcessOperator = new AsyncStateKeyedProcessOperator<>(func);
+                keyedProcessOperator = new AsyncKeyedProcessOperator<>(func);
             } else {
                 RowTimeDeduplicateFunction func =
                         new RowTimeDeduplicateFunction(
@@ -308,7 +308,7 @@ class RowTimeDeduplicateFunctionTest extends RowTimeDeduplicateFunctionTestBase 
                                 generateUpdateBefore,
                                 generateInsert,
                                 true);
-                keyedProcessOperator = new AsyncStateKeyedProcessOperator<>(func);
+                keyedProcessOperator = new AsyncKeyedProcessOperator<>(func);
             } else {
                 RowTimeDeduplicateFunction func =
                         new RowTimeDeduplicateFunction(

@@ -20,8 +20,10 @@ package org.apache.flink.table.runtime.operators.deduplicate;
 
 import org.apache.flink.api.common.typeutils.TypeSerializer;
 import org.apache.flink.streaming.api.operators.OneInputStreamOperator;
+import org.apache.flink.streaming.runtime.operators.asyncprocessing.AsyncStateProcessingOperator;
 import org.apache.flink.streaming.util.KeyedOneInputStreamOperatorTestHarness;
 import org.apache.flink.streaming.util.OneInputStreamOperatorTestHarness;
+import org.apache.flink.streaming.util.asyncprocessing.AsyncKeyedOneInputStreamOperatorTestHarness;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.table.runtime.keyselector.RowDataKeySelector;
 import org.apache.flink.table.runtime.typeutils.InternalTypeInfo;
@@ -55,7 +57,12 @@ abstract class RowTimeDeduplicateFunctionTestBase {
 
     protected OneInputStreamOperatorTestHarness<RowData, RowData> createTestHarness(
             OneInputStreamOperator<RowData, RowData> operator) throws Exception {
-        return new KeyedOneInputStreamOperatorTestHarness<>(
-                operator, rowKeySelector, rowKeySelector.getProducedType());
+        if (operator instanceof AsyncStateProcessingOperator) {
+            return AsyncKeyedOneInputStreamOperatorTestHarness.create(
+                    operator, rowKeySelector, rowKeySelector.getProducedType());
+        } else {
+            return new KeyedOneInputStreamOperatorTestHarness<>(
+                    operator, rowKeySelector, rowKeySelector.getProducedType());
+        }
     }
 }
