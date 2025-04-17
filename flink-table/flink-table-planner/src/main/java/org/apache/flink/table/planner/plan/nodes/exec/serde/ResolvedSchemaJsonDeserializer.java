@@ -20,6 +20,8 @@ package org.apache.flink.table.planner.plan.nodes.exec.serde;
 
 import org.apache.flink.annotation.Internal;
 import org.apache.flink.table.catalog.Column;
+import org.apache.flink.table.catalog.DefaultIndex;
+import org.apache.flink.table.catalog.Index;
 import org.apache.flink.table.catalog.ResolvedSchema;
 import org.apache.flink.table.catalog.UniqueConstraint;
 import org.apache.flink.table.catalog.WatermarkSpec;
@@ -30,11 +32,13 @@ import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.deser.std
 import org.apache.flink.shaded.jackson2.com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.List;
 
 import static org.apache.flink.table.planner.plan.nodes.exec.serde.CompiledPlanSerdeUtil.deserializeOptionalField;
 import static org.apache.flink.table.planner.plan.nodes.exec.serde.CompiledPlanSerdeUtil.traverse;
 import static org.apache.flink.table.planner.plan.nodes.exec.serde.ResolvedSchemaJsonSerializer.COLUMNS;
+import static org.apache.flink.table.planner.plan.nodes.exec.serde.ResolvedSchemaJsonSerializer.INDEXES;
 import static org.apache.flink.table.planner.plan.nodes.exec.serde.ResolvedSchemaJsonSerializer.PRIMARY_KEY;
 import static org.apache.flink.table.planner.plan.nodes.exec.serde.ResolvedSchemaJsonSerializer.WATERMARK_SPECS;
 
@@ -74,6 +78,17 @@ final class ResolvedSchemaJsonDeserializer extends StdDeserializer<ResolvedSchem
                                 ctx)
                         .orElse(null);
 
-        return new ResolvedSchema(columns, watermarkSpecs, primaryKey);
+        List<Index> indexes;
+        if (jsonNode.has(INDEXES)) {
+            indexes =
+                    ctx.readValue(
+                            traverse(jsonNode.required(INDEXES), jsonParser.getCodec()),
+                            ctx.getTypeFactory()
+                                    .constructCollectionType(List.class, DefaultIndex.class));
+        } else {
+            indexes = Collections.emptyList();
+        }
+
+        return new ResolvedSchema(columns, watermarkSpecs, primaryKey, indexes);
     }
 }

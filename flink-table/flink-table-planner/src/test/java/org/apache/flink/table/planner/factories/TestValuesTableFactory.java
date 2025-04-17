@@ -604,7 +604,7 @@ public final class TestValuesTableFactory
                 partition2Rows.put(Collections.emptyMap(), data);
             }
 
-            if (!enableProjectionPushDown) {
+            if (!enableProjectionPushDown && disableLookup) {
                 return new TestValuesScanTableSourceWithoutProjectionPushDown(
                         producedDataType,
                         changelogMode,
@@ -670,6 +670,35 @@ public final class TestValuesTableFactory
                             enableAggregatePushDown);
                 }
             } else {
+                if (!enableProjectionPushDown) {
+                    return new TestValuesLookupTableSourceWithoutProjectionPushDown(
+                            context.getCatalogTable().getResolvedSchema().toPhysicalRowDataType(),
+                            producedDataType,
+                            changelogMode,
+                            boundedness,
+                            terminating,
+                            runtimeSource,
+                            failingSource,
+                            partition2Rows,
+                            isAsync,
+                            lookupFunctionClass,
+                            nestedProjectionSupported,
+                            null,
+                            Collections.emptyList(),
+                            filterableFieldsSet,
+                            dynamicFilteringFieldsSet,
+                            numElementToSkip,
+                            Long.MAX_VALUE,
+                            partitions,
+                            readableMetadata,
+                            null,
+                            cache,
+                            reloadTrigger,
+                            lookupThreshold,
+                            enableAggregatePushDown,
+                            context.getPrimaryKeyIndexes());
+                }
+
                 if (enableCustomShuffle) {
                     return new TestValuesScanLookupTableSourceWithCustomShuffle(
                             context.getCatalogTable().getResolvedSchema().toPhysicalRowDataType(),
@@ -2011,6 +2040,290 @@ public final class TestValuesTableFactory
         @Override
         public DynamicTableSource copy() {
             return new TestValuesScanLookupTableSource(
+                    originType,
+                    producedDataType,
+                    changelogMode,
+                    boundedness,
+                    terminating,
+                    runtimeSource,
+                    failingSource,
+                    data,
+                    isAsync,
+                    lookupFunctionClass,
+                    nestedProjectionSupported,
+                    projectedPhysicalFields,
+                    filterPredicates,
+                    filterableFields,
+                    dynamicFilteringFields,
+                    numElementToSkip,
+                    limit,
+                    allPartitions,
+                    readableMetadata,
+                    projectedMetadataFields,
+                    cache,
+                    reloadTrigger,
+                    lookupThreshold,
+                    enableAggregatePushDown,
+                    primaryKeyIndices);
+        }
+    }
+
+    private static class TestValuesLookupTableSourceWithoutProjectionPushDown
+            extends TestValuesScanTableSourceWithoutProjectionPushDown
+            implements LookupTableSource {
+
+        private final @Nullable String lookupFunctionClass;
+        private final @Nullable LookupCache cache;
+        private final @Nullable CacheReloadTrigger reloadTrigger;
+        private final boolean isAsync;
+        private final int lookupThreshold;
+        private final DataType originType;
+        private final int[] primaryKeyIndices;
+
+        private TestValuesLookupTableSourceWithoutProjectionPushDown(
+                DataType originType,
+                DataType producedDataType,
+                ChangelogMode changelogMode,
+                Boundedness boundedness,
+                TerminatingLogic terminating,
+                String runtimeSource,
+                boolean failingSource,
+                Map<Map<String, String>, Collection<Row>> data,
+                boolean isAsync,
+                @Nullable String lookupFunctionClass,
+                boolean nestedProjectionSupported,
+                int[][] projectedFields,
+                List<ResolvedExpression> filterPredicates,
+                Set<String> filterableFields,
+                Set<String> dynamicFilteringFields,
+                int numElementToSkip,
+                long limit,
+                List<Map<String, String>> allPartitions,
+                Map<String, DataType> readableMetadata,
+                @Nullable int[] projectedMetadataFields,
+                @Nullable LookupCache cache,
+                @Nullable CacheReloadTrigger reloadTrigger,
+                int lookupThreshold,
+                boolean enableAggregatePushDown,
+                int[] primaryKeyIndices) {
+            super(
+                    producedDataType,
+                    changelogMode,
+                    boundedness,
+                    terminating,
+                    runtimeSource,
+                    failingSource,
+                    data,
+                    nestedProjectionSupported,
+                    projectedFields,
+                    filterPredicates,
+                    filterableFields,
+                    dynamicFilteringFields,
+                    numElementToSkip,
+                    limit,
+                    allPartitions,
+                    readableMetadata,
+                    projectedMetadataFields,
+                    null,
+                    enableAggregatePushDown);
+            this.originType = originType;
+            this.lookupFunctionClass = lookupFunctionClass;
+            this.isAsync = isAsync;
+            this.cache = cache;
+            this.reloadTrigger = reloadTrigger;
+            this.lookupThreshold = lookupThreshold;
+            this.primaryKeyIndices = primaryKeyIndices;
+        }
+
+        @Override
+        public LookupRuntimeProvider getLookupRuntimeProvider(LookupContext context) {
+            // TODO: copied from {@link TestValuesLookupTableSource}
+            if (lookupFunctionClass != null) {
+                // use the specified lookup function
+                try {
+                    Class<?> clazz = Class.forName(lookupFunctionClass);
+                    Object udtf = InstantiationUtil.instantiate(clazz);
+                    if (udtf instanceof LookupFunction) {
+                        return LookupFunctionProvider.of((LookupFunction) udtf);
+                    } else if (udtf instanceof AsyncLookupFunction) {
+                        return AsyncLookupFunctionProvider.of((AsyncLookupFunction) udtf);
+                    } else if (udtf instanceof TableFunction) {
+                        return TableFunctionProvider.of((TableFunction) udtf);
+                    } else {
+                        return AsyncTableFunctionProvider.of((AsyncTableFunction) udtf);
+                    }
+                } catch (ClassNotFoundException e) {
+                    throw new IllegalArgumentException(
+                            "Could not instantiate class: " + lookupFunctionClass);
+                }
+            }
+
+            int[] lookupIndices = Arrays.stream(context.getKeys()).mapToInt(k -> k[0]).toArray();
+            Collection<Row> rows;
+            if (allPartitions.equals(Collections.EMPTY_LIST)) {
+                rows = data.getOrDefault(Collections.EMPTY_MAP, Collections.EMPTY_LIST);
+            } else {
+                rows = new ArrayList<>();
+                allPartitions.forEach(
+                        key -> rows.addAll(data.getOrDefault(key, new ArrayList<>())));
+            }
+
+            List<Row> data = new ArrayList<>(rows);
+            if (numElementToSkip > 0) {
+                if (numElementToSkip >= data.size()) {
+                    data = Collections.EMPTY_LIST;
+                } else {
+                    data = data.subList(numElementToSkip, data.size());
+                }
+            }
+            if (nestedProjectionSupported) {
+                throw new UnsupportedOperationException(
+                        "nestedProjectionSupported is unsupported for lookup source currently.");
+            }
+
+            data = deduplicateDataByPk(data);
+
+            DataStructureConverter converter = context.createDataStructureConverter(originType);
+            RowType originRowType =
+                    RowType.of(
+                            originType.getLogicalType().getChildren().toArray(new LogicalType[0]));
+            RowType producedRowType =
+                    RowType.of(
+                            producedDataType
+                                    .getLogicalType()
+                                    .getChildren()
+                                    .toArray(new LogicalType[0]));
+            Optional<GeneratedProjection> generatedProjection =
+                    genProjection(originRowType, producedRowType);
+            if (isAsync) {
+                AsyncTestValueLookupFunction asyncLookupFunction =
+                        getTestValuesAsyncLookupFunction(
+                                data,
+                                lookupIndices,
+                                producedRowType,
+                                converter,
+                                generatedProjection);
+                if (cache == null) {
+                    return AsyncLookupFunctionProvider.of(asyncLookupFunction);
+                } else {
+
+                    return PartialCachingAsyncLookupProvider.of(asyncLookupFunction, cache);
+                }
+            } else {
+                TestValuesLookupFunction lookupFunction =
+                        getTestValuesLookupFunction(
+                                data,
+                                lookupIndices,
+                                producedRowType,
+                                converter,
+                                generatedProjection);
+                if (cache != null) {
+                    return PartialCachingLookupProvider.of(lookupFunction, cache);
+                } else if (reloadTrigger != null) {
+                    DataFormatConverters.RowConverter rowConverter =
+                            new DataFormatConverters.RowConverter(
+                                    originType.getChildren().toArray(new DataType[] {}));
+                    FullCacheTestInputFormat inputFormat =
+                            new FullCacheTestInputFormat(data, generatedProjection, rowConverter);
+                    return FullCachingLookupProvider.of(
+                            InputFormatProvider.of(inputFormat), reloadTrigger);
+                } else {
+                    return LookupFunctionProvider.of(lookupFunction);
+                }
+            }
+        }
+
+        private List<Row> deduplicateDataByPk(List<Row> data) {
+            if (primaryKeyIndices.length == 0) {
+                return data;
+            }
+            // <pk, data>
+            LinkedHashMap<Row, Row> pkMap = new LinkedHashMap<>();
+            for (Row row : data) {
+                Row pk = extractPk(row);
+                RowKind originalRowKind = row.getKind();
+                if (originalRowKind == RowKind.INSERT || originalRowKind == RowKind.UPDATE_AFTER) {
+                    row.setKind(RowKind.INSERT);
+                    pkMap.put(pk, row);
+                } else {
+                    pkMap.remove(pk);
+                }
+            }
+            return new ArrayList<>(pkMap.values());
+        }
+
+        private Row extractPk(Row row) {
+            Object[] pk = new Object[primaryKeyIndices.length];
+            for (int i = 0; i < primaryKeyIndices.length; i++) {
+                pk[i] = row.getField(primaryKeyIndices[i]);
+            }
+            return Row.of(pk);
+        }
+
+        /** Does not support nested projection. */
+        private Optional<GeneratedProjection> genProjection(
+                RowType originRowType, RowType producedRowType) {
+            if (null == projectedPhysicalFields) {
+                return Optional.empty();
+            }
+            CodeGeneratorContext context =
+                    new CodeGeneratorContext(
+                            new Configuration(), Thread.currentThread().getContextClassLoader());
+            int[] mapping =
+                    Arrays.stream(projectedPhysicalFields)
+                            .mapToInt(levelOne -> levelOne[0])
+                            .toArray();
+            return Optional.of(
+                    ProjectionCodeGenerator.generateProjection(
+                            context,
+                            "InternalProjection",
+                            originRowType,
+                            producedRowType,
+                            mapping,
+                            GenericRowData.class));
+        }
+
+        private AsyncTestValueLookupFunction getTestValuesAsyncLookupFunction(
+                List<Row> data,
+                int[] lookupIndices,
+                RowType producedRowType,
+                DataStructureConverter converter,
+                Optional<GeneratedProjection> projection) {
+            if (lookupThreshold > 0) {
+                return new TestNoLookupUntilNthAccessAsyncLookupFunction(
+                        data,
+                        lookupIndices,
+                        producedRowType,
+                        converter,
+                        projection,
+                        lookupThreshold);
+            }
+            return new AsyncTestValueLookupFunction(
+                    data, lookupIndices, producedRowType, converter, projection);
+        }
+
+        private TestValuesLookupFunction getTestValuesLookupFunction(
+                List<Row> data,
+                int[] lookupIndices,
+                RowType producedRowType,
+                DataStructureConverter converter,
+                Optional<GeneratedProjection> generatedProjection) {
+            if (lookupThreshold > 0) {
+                return new TestNoLookupUntilNthAccessLookupFunction(
+                        data,
+                        lookupIndices,
+                        producedRowType,
+                        converter,
+                        generatedProjection,
+                        lookupThreshold);
+            }
+            return new TestValuesLookupFunction(
+                    data, lookupIndices, producedRowType, converter, generatedProjection);
+        }
+
+        @Override
+        public DynamicTableSource copy() {
+            return new TestValuesLookupTableSourceWithoutProjectionPushDown(
                     originType,
                     producedDataType,
                     changelogMode,

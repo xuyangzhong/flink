@@ -930,10 +930,8 @@ public final class CatalogManager implements CatalogRegistry, AutoCloseable {
      */
     public Set<String> listSchemas(String catalogName) {
         return Stream.concat(
-                        getCatalog(catalogName)
-                                .map(Catalog::listDatabases)
-                                .orElse(Collections.emptyList())
-                                .stream(),
+                        getCatalog(catalogName).map(Catalog::listDatabases)
+                                .orElse(Collections.emptyList()).stream(),
                         temporaryTables.keySet().stream()
                                 .filter(i -> i.getCatalogName().equals(catalogName))
                                 .map(ObjectIdentifier::getDatabaseName))
@@ -1846,7 +1844,8 @@ public final class CatalogManager implements CatalogRegistry, AutoCloseable {
                                                                             .get(i)))
                                     .collect(Collectors.toList()),
                             resolvedSchema.getWatermarkSpecs(),
-                            resolvedSchema.getPrimaryKey().orElse(null));
+                            resolvedSchema.getPrimaryKey().orElse(null),
+                            resolvedSchema.getIndexes());
             return new ResolvedCatalogView(
                     // pass a view that has the query parsed and
                     // validated already

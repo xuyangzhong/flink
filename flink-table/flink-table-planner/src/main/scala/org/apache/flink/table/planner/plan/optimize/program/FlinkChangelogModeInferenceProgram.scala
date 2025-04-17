@@ -24,11 +24,12 @@ import org.apache.flink.table.api.config.ExecutionConfigOptions.UpsertMaterializ
 import org.apache.flink.table.connector.ChangelogMode
 import org.apache.flink.table.planner.calcite.FlinkTypeFactory
 import org.apache.flink.table.planner.plan.`trait`._
-import org.apache.flink.table.planner.plan.`trait`.DeleteKindTrait.{deleteOnKeyOrNone, fullDeleteOrNone, DELETE_BY_KEY, FULL_DELETE}
+import org.apache.flink.table.planner.plan.`trait`.DeleteKindTrait.{deleteOnKeyOrNone, fullDeleteOrNone, DELETE_BY_KEY}
 import org.apache.flink.table.planner.plan.`trait`.UpdateKindTrait.{beforeAfterOrNone, onlyAfterOrNone, BEFORE_AND_AFTER, ONLY_UPDATE_AFTER}
 import org.apache.flink.table.planner.plan.metadata.FlinkRelMetadataQuery
 import org.apache.flink.table.planner.plan.nodes.physical.stream._
 import org.apache.flink.table.planner.plan.optimize.ChangelogNormalizeRequirementResolver
+import org.apache.flink.table.planner.plan.optimize.program.FlinkChangelogModeInferenceProgram.{getModifyKindSet, SatisfyDeleteKindTraitVisitor, SatisfyModifyKindSetTraitVisitor, SatisfyUpdateKindTraitVisitor}
 import org.apache.flink.table.planner.plan.utils._
 import org.apache.flink.table.planner.plan.utils.RankProcessStrategy.{AppendFastStrategy, RetractStrategy, UpdateFastStrategy}
 import org.apache.flink.table.planner.sinks.DataStreamTableSink
@@ -113,6 +114,9 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
       finalRoot.head
     }
   }
+}
+
+object FlinkChangelogModeInferenceProgram {
 
   /**
    * A visitor which will try to satisfy the required [[ModifyKindSetTrait]] from root.
@@ -121,7 +125,7 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
    * an exception should be thrown if the planner doesn't support to satisfy the required
    * [[ModifyKindSetTrait]].
    */
-  private class SatisfyModifyKindSetTraitVisitor {
+  class SatisfyModifyKindSetTraitVisitor {
 
     /**
      * Try to satisfy the required [[ModifyKindSetTrait]] from root.
@@ -526,7 +530,7 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
    * <p>After traversed by this visitor, every node should have a correct [[UpdateKindTrait]] or
    * returns None if the planner doesn't support to satisfy the required [[UpdateKindTrait]].
    */
-  private class SatisfyUpdateKindTraitVisitor(private val context: StreamOptimizeContext) {
+  class SatisfyUpdateKindTraitVisitor(private val context: StreamOptimizeContext) {
 
     /**
      * Try to satisfy the required [[UpdateKindTrait]] from root.
@@ -1000,7 +1004,7 @@ class FlinkChangelogModeInferenceProgram extends FlinkOptimizeProgram[StreamOpti
    * <p>After traversed by this visitor, every node should have a correct [[DeleteKindTrait]] or
    * returns None if the planner doesn't support to satisfy the required [[DeleteKindTrait]].
    */
-  private class SatisfyDeleteKindTraitVisitor(private val context: StreamOptimizeContext) {
+  class SatisfyDeleteKindTraitVisitor(private val context: StreamOptimizeContext) {
 
     /**
      * Try to satisfy the required [[DeleteKindTrait]] from root.

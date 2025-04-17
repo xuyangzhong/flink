@@ -511,7 +511,9 @@ object FlinkStreamRuleSets {
     // incremental agg rule
     IncrementalAggregateRule.INSTANCE,
     // optimize window agg rule
-    TwoStageOptimizedWindowAggregateRule.INSTANCE
+    TwoStageOptimizedWindowAggregateRule.INSTANCE,
+    // optimize delta join rule
+    StreamPhysicalDeltaJoinRewriteRule.INSTANCE
   )
 
 }

@@ -351,6 +351,17 @@ public class OptimizerConfigOptions {
                                     + "it receives incremental accumulators and outputs incremental results). "
                                     + "In this way, we can reduce some state overhead and resources. Default is enabled.");
 
+    @Documentation.TableOption(execMode = Documentation.ExecMode.STREAMING)
+    public static final ConfigOption<DeltaJoinStrategy> TABLE_OPTIMIZER_DELTA_JOIN_STRATEGY =
+            key("table.optimizer.delta-join.strategy")
+                    .enumType(DeltaJoinStrategy.class)
+                    .defaultValue(DeltaJoinStrategy.NONE)
+                    .withDescription(
+                            "Whether to enable delta join strategy. Only AUTO, FORCE or NONE can be set.\n"
+                                    + "AUTO: Optimizer will try to use delta join first. If failed, it will fallback to regular join.\n"
+                                    + "FORCE: Enforce to use delta join. If failed, an exception will be thrown.\n"
+                                    + "NONE: Don't try to use delta join.");
+
     /** Strategy for handling non-deterministic updates. */
     @PublicEvolving
     public enum NonDeterministicUpdateStrategy {
@@ -424,5 +435,13 @@ public class OptimizerConfigOptions {
         public InlineElement getDescription() {
             return description;
         }
+    }
+
+    /** Strategy for delta join. */
+    @PublicEvolving
+    public enum DeltaJoinStrategy {
+        AUTO,
+        FORCE,
+        NONE
     }
 }
