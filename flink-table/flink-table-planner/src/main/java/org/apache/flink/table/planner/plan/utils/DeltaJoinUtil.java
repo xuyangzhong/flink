@@ -276,17 +276,13 @@ public class DeltaJoinUtil {
         // the source must have at least one index, and the join key contains one index
         Set<Integer> lookupKeysSet = Arrays.stream(lookupKeys).boxed().collect(Collectors.toSet());
 
-        boolean lookupKeyContainsOneIndex = false;
-        for (int[] idxsOfIndex : idxsOfAllIndexes) {
-            Preconditions.checkState(idxsOfIndex.length > 0);
-
-            // ignore the field order of the index
-            boolean containsIndex = Arrays.stream(idxsOfIndex).allMatch(lookupKeysSet::contains);
-            if (containsIndex) {
-                lookupKeyContainsOneIndex = true;
-                break;
-            }
-        }
+        boolean lookupKeyContainsOneIndex =
+                Arrays.stream(idxsOfAllIndexes)
+                        .peek(idxsOfIndex -> Preconditions.checkState(idxsOfIndex.length > 0))
+                        .anyMatch(
+                                idxsOfIndex ->
+                                        Arrays.stream(idxsOfIndex)
+                                                .allMatch(lookupKeysSet::contains));
         if (!lookupKeyContainsOneIndex) {
             return false;
         }
