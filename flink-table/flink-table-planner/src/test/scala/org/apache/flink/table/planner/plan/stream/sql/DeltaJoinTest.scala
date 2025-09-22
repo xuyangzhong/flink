@@ -654,7 +654,6 @@ class DeltaJoinTest extends TableTestBase {
     util.verifyRelPlan(stmt)
   }
 
-
   private def addTable(
       tableName: String,
       schema: Schema,
